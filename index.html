@@ -142,9 +142,20 @@
             <span class="panel-hint">自動儲存</span>
           </h2>
           <div class="bullet-legend">
-            <span>• 筆記</span><span>○ 待辦</span><span>✕ 取消</span><span>★ 重點</span>
+            <span title="筆記">•&nbsp;筆記</span>
+            <span title="待辦">○&nbsp;待辦</span>
+            <span title="完成">✓&nbsp;完成</span>
+            <span title="取消">✕&nbsp;取消</span>
+            <span title="排程">◎&nbsp;排程</span>
+            <span title="重點">★&nbsp;重點</span>
           </div>
-          <textarea id="bulletNotes" class="bullet-textarea" placeholder="今日筆記、學習心得、重點摘要…"></textarea>
+          <div class="bullet-input-row">
+            <input id="bulletInput" class="todo-input" type="text"
+              placeholder="輸入筆記後按 Enter…"
+              onkeydown="if(event.key==='Enter')addBulletEntry()">
+            <button class="small-btn" onclick="addBulletEntry()">+</button>
+          </div>
+          <ul id="bulletList" class="bullet-list"></ul>
         </div>
       </div>
     </div>
@@ -175,6 +186,27 @@
     <button class="modal-close" onclick="closeDayModal()">✕</button>
     <h2 id="modalDate" class="modal-title"></h2>
     <div id="modalEvents"></div>
+
+    <!-- Add event button -->
+    <button class="add-ev-btn" onclick="showAddEventForm()">＋ 新增行程</button>
+
+    <!-- Add event form (hidden by default) -->
+    <div id="addEventForm" style="display:none" class="add-ev-form">
+      <div class="add-ev-row">
+        <input id="newEvName" class="todo-input" type="text" placeholder="行程名稱（例：稅法補課）">
+        <select id="newEvType" class="ev-type-select">
+          <option value="class">上課</option>
+          <option value="review">複習</option>
+          <option value="appt">行程</option>
+        </select>
+      </div>
+      <input id="newEvNote" class="todo-input" type="text" placeholder="備註（選填）" style="width:100%;margin-top:8px">
+      <div class="add-ev-actions">
+        <button class="small-btn" onclick="submitAddEvent()">新增</button>
+        <button class="cancel-btn" onclick="document.getElementById('addEventForm').style.display='none'">取消</button>
+      </div>
+    </div>
+
     <hr class="modal-divider">
     <h3 class="modal-subtitle">筆記</h3>
     <textarea id="modalNotes" class="bullet-textarea modal-notes" placeholder="今日筆記…"></textarea>
