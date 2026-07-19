@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Planner — Sophie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Sidebar Nav -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-mark">SP</span>
+    <span class="logo-text">Study<br>Planner</span>
+  </div>
+  <ul class="nav-links">
+    <li><button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      儀表板
+    </button></li>
+    <li><button class="nav-btn" data-view="calendar" onclick="switchView('calendar')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      月曆
+    </button></li>
+    <li><button class="nav-btn" data-view="daily" onclick="switchView('daily')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+      每日
+    </button></li>
+    <li><button class="nav-btn" data-view="habits" onclick="switchView('habits')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      習慣
+    </button></li>
+  </ul>
+  <div class="sidebar-footer">
+    <div class="exam-countdown" id="examCountdown"></div>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main class="main">
+
+  <!-- ── Dashboard ── -->
+  <section id="view-dashboard" class="view active">
+    <header class="view-header">
+      <h1>儀表板</h1>
+      <span class="view-date" id="dashDate"></span>
+    </header>
+
+    <div class="dash-grid">
+      <!-- Stats row -->
+      <div class="stat-cards">
+        <div class="stat-card">
+          <span class="stat-value" id="statDaysLeft">—</span>
+          <span class="stat-label">距考試天數</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statTotalHours">—</span>
+          <span class="stat-label">累計學習時數</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statCourseDone">—</span>
+          <span class="stat-label">已完課課程</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statReviewDone">—</span>
+          <span class="stat-label">複習場次</span>
+        </div>
+      </div>
+
+      <!-- Course progress -->
+      <div class="dash-panel">
+        <h2 class="panel-title">課程進度</h2>
+        <div id="courseProgress"></div>
+      </div>
+
+      <!-- Today's schedule -->
+      <div class="dash-panel">
+        <h2 class="panel-title">今日行程</h2>
+        <div id="todaySchedule"></div>
+      </div>
+
+      <!-- Weekly overview -->
+      <div class="dash-panel dash-panel--wide">
+        <h2 class="panel-title">本週概覽</h2>
+        <div id="weekOverview"></div>
+      </div>
+
+      <!-- Upcoming -->
+      <div class="dash-panel">
+        <h2 class="panel-title">近期課程結束</h2>
+        <div id="upcomingMilestones"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Calendar ── -->
+  <section id="view-calendar" class="view">
+    <header class="view-header">
+      <h1>月曆</h1>
+      <div class="cal-nav">
+        <button class="icon-btn" onclick="calPrev()">&#8592;</button>
+        <span id="calMonthLabel"></span>
+        <button class="icon-btn" onclick="calNext()">&#8594;</button>
+      </div>
+    </header>
+    <div class="cal-legend" id="calLegend"></div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </section>
+
+  <!-- ── Daily ── -->
+  <section id="view-daily" class="view">
+    <header class="view-header">
+      <h1>每日計畫</h1>
+      <div class="cal-nav">
+        <button class="icon-btn" onclick="dailyPrev()">&#8592;</button>
+        <span id="dailyDateLabel"></span>
+        <button class="icon-btn" onclick="dailyNext()">&#8594;</button>
+      </div>
+    </header>
+    <div class="daily-layout">
+      <div class="daily-left">
+        <div class="daily-panel">
+          <h2 class="panel-title">今日安排</h2>
+          <div id="dailyEvents"></div>
+        </div>
+        <div class="daily-panel">
+          <h2 class="panel-title">待辦清單</h2>
+          <div class="todo-input-row">
+            <input id="todoInput" class="todo-input" type="text" placeholder="新增待辦…" onkeydown="if(event.key==='Enter')addTodo()">
+            <button class="small-btn" onclick="addTodo()">+</button>
+          </div>
+          <ul id="todoList" class="todo-list"></ul>
+        </div>
+      </div>
+      <div class="daily-right">
+        <div class="daily-panel daily-panel--notes">
+          <h2 class="panel-title">
+            子彈筆記
+            <span class="panel-hint">自動儲存</span>
+          </h2>
+          <div class="bullet-legend">
+            <span>• 筆記</span><span>○ 待辦</span><span>✕ 取消</span><span>★ 重點</span>
+          </div>
+          <textarea id="bulletNotes" class="bullet-textarea" placeholder="今日筆記、學習心得、重點摘要…"></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Habits ── -->
+  <section id="view-habits" class="view">
+    <header class="view-header">
+      <h1>習慣追蹤</h1>
+      <div class="cal-nav">
+        <button class="icon-btn" onclick="habitPrev()">&#8592;</button>
+        <span id="habitMonthLabel"></span>
+        <button class="icon-btn" onclick="habitNext()">&#8594;</button>
+      </div>
+    </header>
+    <div class="habits-manage">
+      <input id="habitInput" class="todo-input" type="text" placeholder="新增習慣…" onkeydown="if(event.key==='Enter')addHabit()">
+      <button class="small-btn" onclick="addHabit()">+</button>
+    </div>
+    <div id="habitTracker"></div>
+  </section>
+
+</main>
+
+<!-- Day Detail Modal -->
+<div id="dayModal" class="modal-overlay" onclick="closeDayModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeDayModal()">✕</button>
+    <h2 id="modalDate" class="modal-title"></h2>
+    <div id="modalEvents"></div>
+    <hr class="modal-divider">
+    <h3 class="modal-subtitle">筆記</h3>
+    <textarea id="modalNotes" class="bullet-textarea modal-notes" placeholder="今日筆記…"></textarea>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
