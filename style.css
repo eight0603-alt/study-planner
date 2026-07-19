@@ -441,3 +441,137 @@ body { display: flex; }
 .modal-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .modal-subtitle { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); margin-bottom: 10px; }
 .modal-notes { min-height: 160px; }
+
+/* ── Event editing ───────────────────────────────── */
+.modal-event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  transition: opacity 0.2s;
+}
+.modal-event-row:last-child { border-bottom: none; }
+.modal-event-row.ev-done { opacity: 0.5; }
+.ev-done .schedule-course { text-decoration: line-through; }
+.schedule-item.ev-done { opacity: 0.5; }
+.schedule-item.ev-done .schedule-course { text-decoration: line-through; }
+
+.ev-action-btn {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  display: grid; place-items: center;
+  transition: background 0.1s;
+}
+.ev-action-btn:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.ev-del-btn:hover { background: var(--danger); border-color: var(--danger); }
+
+.add-ev-btn {
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.add-ev-btn:hover { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
+
+.add-ev-form {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.add-ev-row { display: flex; gap: 8px; }
+.ev-type-select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.add-ev-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; }
+.cancel-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+  transition: background 0.1s;
+}
+.cancel-btn:hover { background: var(--bg3); }
+
+.link-btn {
+  background: none; border: none;
+  color: var(--accent); font: inherit;
+  font-size: 13px; cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── Bullet Journal ──────────────────────────────── */
+.bullet-input-row {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.bullet-list {
+  display: flex; flex-direction: column; gap: 2px;
+  list-style: none;
+}
+.bullet-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  transition: background 0.1s;
+}
+.bullet-item:hover { background: #2a2f38; }
+.bullet-status-btn {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: grid; place-items: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+  user-select: none;
+}
+.bullet-status-btn:hover { border-color: var(--accent); }
+.bullet-text {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: none;
+  border: none;
+  outline: none;
+  width: 100%;
+}
+.bullet-text:focus { color: var(--text); }
+.bullet-item.status-done   .bullet-text { text-decoration: line-through; color: var(--text-3); }
+.bullet-item.status-cancel .bullet-text { text-decoration: line-through; color: var(--text-3); opacity: 0.5; }
+.bullet-item.status-key    .bullet-text { color: #F0B72F; font-weight: 500; }
+.bullet-item.status-scheduled .bullet-text { color: var(--accent); }
+.bullet-del-btn {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.bullet-item:hover .bullet-del-btn { opacity: 1; }
+.bullet-del-btn:hover { color: var(--danger); }
