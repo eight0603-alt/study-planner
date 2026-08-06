@@ -176,6 +176,10 @@ function renderDashboard() {
 }
 
 // ── Calendar ──────────────────────────────────────
+// ── Drag state ────────────────────────────────────
+let dragEv     = null;  // { ev, fromDs, evIdx, isBuiltin }
+let dragEl     = null;
+
 function renderCalendar() {
   document.getElementById('calMonthLabel').textContent = `${calYear}年 ${MONTHS_CN[calMonth]}`;
   const legendEl = document.getElementById('calLegend');
@@ -183,36 +187,213 @@ function renderCalendar() {
     `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${c.name}</div>`
   ).join('')+`<div class="legend-item"><div class="legend-swatch" style="background:#B088CC"></div>身心科</div>
    <div class="legend-item"><div class="legend-swatch" style="background:#5EAA6E"></div>瑜伽</div>
-   <div class="legend-item"><div class="legend-swatch" style="background:#C4678A"></div>美甲</div>`;
+   <div class="legend-item"><div class="legend-swatch" style="background:#C4678A"></div>美甲</div>
+   <div class="legend-item" style="font-style:italic;color:var(--text-3)">拖曳可移動行程</div>`;
 
   const firstDay=new Date(calYear,calMonth,1);
   const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
   let startWd=firstDay.getDay(); startWd=startWd===0?6:startWd-1;
   const todayS=todayStr();
 
-  let html='<table class="cal-table"><thead><tr>';
-  ['一','二','三','四','五','六','日'].forEach(d=>html+=`<th>${d}</th>`);
-  html+='</tr></thead><tbody><tr>';
-  for(let i=0;i<startWd;i++) html+='<td class="empty"></td>';
-  let col=startWd;
+  // Build table via DOM for proper event listeners
+  const wrap = document.getElementById('calendarGrid');
+  wrap.innerHTML = '';
+  const table = document.createElement('table');
+  table.className = 'cal-table';
+
+  // Header
+  const thead = table.createTHead();
+  const hrow  = thead.insertRow();
+  ['一','二','三','四','五','六','日'].forEach(d=>{
+    const th = document.createElement('th'); th.textContent = d; hrow.appendChild(th);
+  });
+
+  const tbody = table.createTBody();
+  let row = tbody.insertRow();
+  for(let i=0;i<startWd;i++){
+    const td=row.insertCell(); td.className='empty';
+  }
+  let col = startWd;
 
   for(let day=1;day<=daysInMonth;day++){
     const ds=`${calYear}/${String(calMonth+1).padStart(2,'0')}/${String(day).padStart(2,'0')}`;
-    const evs=eventsOn(ds); const isToday=ds===todayS;
-    html+=`<td class="${isToday?'today':''}" onclick="openDayModal('${ds}')">`;
-    html+=`<div class="day-num">${day}</div>`;
-    evs.forEach(ev=>{
-      const color=evColor(ev);
-      const cls=ev.type==='review'?'cal-event review':ev.type==='appt'?'cal-event appt':'cal-event';
-      html+=`<div class="${cls}" style="background:${color}22;color:${color}">${ev.course}</div>`;
+    const isToday = ds===todayS;
+    const td = row.insertCell();
+    if(isToday) td.className='today';
+    td.dataset.ds = ds;
+
+    // Day number
+    const dayNum = document.createElement('div');
+    dayNum.className='day-num'; dayNum.textContent=day;
+    td.appendChild(dayNum);
+
+    // Events container (for inner reorder drag)
+    const evContainer = document.createElement('div');
+    evContainer.className='ev-container';
+    evContainer.dataset.ds = ds;
+    td.appendChild(evContainer);
+
+    // Render events
+    renderCalDayEvents(evContainer, ds);
+
+    // Drop target: accept cross-day drag
+    td.addEventListener('dragover', e=>{
+      e.preventDefault();
+      td.classList.add('drag-over');
     });
-    html+='</td>';
-    col++; if(col===7&&day<daysInMonth){html+='</tr><tr>';col=0;}
+    td.addEventListener('dragleave', e=>{
+      if(!td.contains(e.relatedTarget)) td.classList.remove('drag-over');
+    });
+    td.addEventListener('drop', e=>{
+      e.preventDefault();
+      td.classList.remove('drag-over');
+      const toDs = td.dataset.ds;
+      if(dragEv && toDs && toDs !== dragEv.fromDs) {
+        moveDragEvent(toDs);
+      }
+    });
+
+    // Click to open modal (only if not dragging)
+    td.addEventListener('click', e=>{
+      if(!dragEv) openDayModal(ds);
+    });
+
+    col++;
+    if(col===7 && day<daysInMonth){ row=tbody.insertRow(); col=0; }
   }
-  while(col<7&&col>0){html+='<td class="empty"></td>';col++;}
-  html+='</tr></tbody></table>';
-  document.getElementById('calendarGrid').innerHTML=html;
+  while(col<7&&col>0){ const td=row.insertCell(); td.className='empty'; col++; }
+
+  wrap.appendChild(table);
 }
+
+function renderCalDayEvents(container, ds) {
+  container.innerHTML = '';
+  const builtin = SCHEDULE_DATA.schedule[ds] || [];
+  const custom  = getCustomEvents(ds);
+  const moved   = storage(`moved-${ds}`) || [];   // built-in events moved TO this day
+  const hidden  = storage(`hidden-${ds}`) || [];  // built-in events moved AWAY from original day
+
+  // Order: builtin (non-hidden) + moved-in + custom
+  // For reorder, we store a custom order array per day
+  const allEvs = [];
+
+  // Built-in (skip hidden)
+  builtin.forEach((ev, i) => {
+    if (!hidden.includes(i)) allEvs.push({ev, evIdx: i, isBuiltin: true, movedIdx: null});
+  });
+  // Moved-in built-ins
+  moved.forEach((m, mi) => {
+    allEvs.push({ev: m.ev, evIdx: mi, isBuiltin: false, movedIdx: mi, fromDs: m.fromDs});
+  });
+  // Custom
+  custom.forEach((ev, i) => {
+    allEvs.push({ev, evIdx: i, isBuiltin: false, movedIdx: null, isCustom: true});
+  });
+
+  // Apply stored sort order
+  const order = storage(`order-${ds}`);
+  let orderedEvs = allEvs;
+  if (order && order.length === allEvs.length) {
+    try {
+      orderedEvs = order.map(i => allEvs[i]).filter(Boolean);
+    } catch(e) { orderedEvs = allEvs; }
+  }
+
+  orderedEvs.forEach((item, pos) => {
+    const {ev} = item;
+    const color = evColor(ev);
+    const chip = document.createElement('div');
+    chip.className = `cal-event ${ev.type==='review'?'review':ev.type==='appt'?'appt':''}`;
+    chip.style.background = `${color}22`;
+    chip.style.color = color;
+    chip.textContent = ev.course;
+    chip.draggable = true;
+    chip.dataset.pos = pos;
+    chip.title = `${ev.course} — 拖曳可移動`;
+
+    chip.addEventListener('dragstart', e => {
+      dragEv = { ev, fromDs: ds, pos, item };
+      dragEl = chip;
+      chip.style.opacity = '0.4';
+      e.stopPropagation();
+    });
+    chip.addEventListener('dragend', e => {
+      chip.style.opacity = '1';
+      dragEv = null; dragEl = null;
+      document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    });
+
+    // Reorder within same cell
+    chip.addEventListener('dragover', e => {
+      e.preventDefault(); e.stopPropagation();
+      if(dragEv && dragEv.fromDs === ds && pos !== dragEv.pos) {
+        chip.style.borderTop = pos < dragEv.pos ? '' : '2px solid var(--accent)';
+        chip.style.borderBottom = pos < dragEv.pos ? '2px solid var(--accent)' : '';
+      }
+    });
+    chip.addEventListener('dragleave', e => {
+      chip.style.borderTop=''; chip.style.borderBottom='';
+    });
+    chip.addEventListener('drop', e => {
+      e.stopPropagation(); e.preventDefault();
+      chip.style.borderTop=''; chip.style.borderBottom='';
+      if(dragEv && dragEv.fromDs === ds && pos !== dragEv.pos) {
+        reorderDayEvents(ds, dragEv.pos, pos, allEvs.length);
+      }
+    });
+
+    container.appendChild(chip);
+  });
+}
+
+function reorderDayEvents(ds, fromPos, toPos, total) {
+  const order = storage(`order-${ds}`) || Array.from({length:total},(_,i)=>i);
+  const item = order.splice(fromPos, 1)[0];
+  order.splice(toPos, 0, item);
+  storage(`order-${ds}`, order);
+  const cont = document.querySelector(`.ev-container[data-ds="${ds}"]`);
+  if(cont) renderCalDayEvents(cont, ds);
+  dragEv = null;
+}
+
+function moveDragEvent(toDs) {
+  if(!dragEv) return;
+  const {ev, fromDs, item} = dragEv;
+
+  // Remove from source
+  if(item.isCustom) {
+    const customs = getCustomEvents(fromDs);
+    customs.splice(item.evIdx, 1);
+    saveCustomEvents(fromDs, customs);
+  } else if(item.isBuiltin) {
+    // Mark as hidden on the original day
+    const hidden = storage(`hidden-${fromDs}`) || [];
+    if(!hidden.includes(item.evIdx)) hidden.push(item.evIdx);
+    storage(`hidden-${fromDs}`, hidden);
+  } else if(item.fromDs) {
+    // It's a previously-moved built-in — remove from moved list
+    const moved = storage(`moved-${fromDs}`) || [];
+    moved.splice(item.movedIdx, 1);
+    storage(`moved-${fromDs}`, moved);
+  }
+  // Clear order cache for source
+  storage(`order-${fromDs}`, null);
+
+  // Add to destination
+  const moved = storage(`moved-${toDs}`) || [];
+  moved.push({ev, fromDs: item.isBuiltin ? fromDs : (item.fromDs || fromDs)});
+  storage(`moved-${toDs}`, moved);
+  storage(`order-${toDs}`, null);
+
+  dragEv = null;
+
+  // Re-render both cells
+  const fromCont = document.querySelector(`.ev-container[data-ds="${fromDs}"]`);
+  const toCont   = document.querySelector(`.ev-container[data-ds="${toDs}"]`);
+  if(fromCont) renderCalDayEvents(fromCont, fromDs);
+  if(toCont)   renderCalDayEvents(toCont, toDs);
+}
+
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
 
