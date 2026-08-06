@@ -575,3 +575,14 @@ body { display: flex; }
 }
 .bullet-item:hover .bullet-del-btn { opacity: 1; }
 .bullet-del-btn:hover { color: var(--danger); }
+
+/* ── Drag & Drop ─────────────────────────────────── */
+.ev-container { display: flex; flex-direction: column; gap: 2px; }
+.cal-table td.drag-over {
+  background: rgba(88,166,255,0.08) !important;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+.cal-event[draggable="true"] { cursor: grab; }
+.cal-event[draggable="true"]:active { cursor: grabbing; }
+.cal-event { transition: opacity 0.15s, border 0.1s; }
