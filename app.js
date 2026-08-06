@@ -41,7 +41,10 @@ function getCompleted(ds)           { return storage(`completed-${ds}`) || []; }
 function allEventsOn(ds) {
   const result = [];
   const builtin = SCHEDULE_DATA.schedule[ds] || [];
-  builtin.forEach((ev, i) => result.push({ev, srcType:'builtin', srcIdx:i}));
+  const hidden  = storage(`hidden-${ds}`) || [];
+  builtin.forEach((ev, i) => {
+    if (!hidden.includes(i)) result.push({ev, srcType:'builtin', srcIdx:i});
+  });
   getMovedEvents(ds).forEach((ev, i) => result.push({ev, srcType:'moved', srcIdx:i}));
   getCustomEvents(ds).forEach((ev, i) => result.push({ev, srcType:'custom', srcIdx:i}));
   return result;
@@ -309,17 +312,21 @@ function execMoveEvent(toDs) {
   const {ev, fromDs, srcType, srcIdx}=dragInfo;
   dragInfo=null;
 
-  if(srcType==='custom') {
-    // Remove from source
-    const customs=getCustomEvents(fromDs);
-    customs.splice(srcIdx,1);
-    saveCustomEvents(fromDs,customs);
+  // ── Remove from source (all types) ──
+  if(srcType==='custom'){
+    const evs=getCustomEvents(fromDs); evs.splice(srcIdx,1); saveCustomEvents(fromDs,evs);
+  } else if(srcType==='moved'){
+    const evs=getMovedEvents(fromDs); evs.splice(srcIdx,1); saveMovedEvents(fromDs,evs);
+  } else if(srcType==='builtin'){
+    // Hide this built-in on its original day
+    const hidden=storage(`hidden-${fromDs}`)||[];
+    if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
+    storage(`hidden-${fromDs}`,hidden);
   }
-  // Built-in and moved: copy to target, keep original
 
-  // Add to target as a moved event
+  // ── Add to destination ──
   const moved=getMovedEvents(toDs);
-  moved.push({...ev});
+  moved.push({course:ev.course, type:ev.type, label:ev.label||'', progress:ev.progress||''});
   saveMovedEvents(toDs,moved);
 
   // Re-render both days
@@ -372,8 +379,9 @@ function renderModalContent() {
         <div class="schedule-detail">${ev.label||''} ${ev.progress&&ev.progress!=='—'?'('+ev.progress+')':''}</div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
+        <button class="ev-action-btn" onclick="editModalEvent('${ds}','${srcType}',${srcIdx})" title="編輯">✎</button>
         ${isBuiltin?`<button class="ev-action-btn" onclick="toggleModalDone('${ds}',${srcIdx})" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>`:''}
-        ${(isCustom||isMoved)?`<button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>`:''}
+        <button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>
       </div>
     </div>`;
   });
@@ -396,6 +404,47 @@ function deleteModalEvent(ds, srcType, srcIdx) {
     const evs=getCustomEvents(ds); evs.splice(srcIdx,1); saveCustomEvents(ds,evs);
   } else if(srcType==='moved'){
     const evs=getMovedEvents(ds); evs.splice(srcIdx,1); saveMovedEvents(ds,evs);
+  } else if(srcType==='builtin'){
+    // Hide this built-in event on this day
+    const hidden=storage(`hidden-${ds}`)||[];
+    if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
+    storage(`hidden-${ds}`,hidden);
+  }
+  renderModalContent();
+  const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
+  if(cont) buildCalDayEvents(cont,ds);
+}
+
+function editModalEvent(ds, srcType, srcIdx) {
+  const items=allEventsOn(ds);
+  // find the item matching srcType+srcIdx
+  const match=items.find(x=>x.srcType===srcType && x.srcIdx===srcIdx);
+  if(!match) return;
+  const newName=prompt('課程名稱：', match.ev.course);
+  if(newName===null) return;  // cancelled
+  const newLabel=prompt('備註：', match.ev.label||'');
+  if(newLabel===null) return;
+
+  if(srcType==='custom'){
+    const evs=getCustomEvents(ds);
+    evs[srcIdx].course=newName.trim()||evs[srcIdx].course;
+    evs[srcIdx].label=newLabel;
+    saveCustomEvents(ds,evs);
+  } else if(srcType==='moved'){
+    const evs=getMovedEvents(ds);
+    evs[srcIdx].course=newName.trim()||evs[srcIdx].course;
+    evs[srcIdx].label=newLabel;
+    saveMovedEvents(ds,evs);
+  } else if(srcType==='builtin'){
+    // For built-in: hide original and create a custom copy with edits
+    const hidden=storage(`hidden-${ds}`)||[];
+    if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
+    storage(`hidden-${ds}`,hidden);
+    const orig=match.ev;
+    const customs=getCustomEvents(ds);
+    customs.push({course:newName.trim()||orig.course, type:orig.type,
+                  label:newLabel, progress:orig.progress||''});
+    saveCustomEvents(ds,customs);
   }
   renderModalContent();
   const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
