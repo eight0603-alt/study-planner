@@ -366,12 +366,9 @@ function moveDragEvent(toDs) {
     customs.splice(item.evIdx, 1);
     saveCustomEvents(fromDs, customs);
   } else if(item.isBuiltin) {
-    // Mark as hidden on the original day
-    const hidden = storage(`hidden-${fromDs}`) || [];
-    if(!hidden.includes(item.evIdx)) hidden.push(item.evIdx);
-    storage(`hidden-${fromDs}`, hidden);
+    // Built-in: COPY only, do NOT hide from original day
   } else if(item.fromDs) {
-    // It's a previously-moved built-in — remove from moved list
+    // It's a previously-moved built-in — remove from moved list on source
     const moved = storage(`moved-${fromDs}`) || [];
     moved.splice(item.movedIdx, 1);
     storage(`moved-${fromDs}`, moved);
