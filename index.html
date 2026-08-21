@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 
@@ -120,7 +120,7 @@
         <button class="icon-btn" onclick="dailyNext()">&#8594;</button>
       </div>
     </header>
-    <div class="daily-layout">
+    <div class="daily-layout daily-layout--2col">
 
       <!-- 時間軸 -->
       <div class="daily-col">
@@ -132,18 +132,6 @@
           <div class="timeline-wrap">
             <div class="timeline" id="timeline"></div>
           </div>
-        </div>
-      </div>
-
-      <!-- 待辦清單 -->
-      <div class="daily-col">
-        <div class="daily-panel">
-          <h2 class="panel-title">待辦清單</h2>
-          <div class="todo-input-row">
-            <input id="todoInput" class="todo-input" type="text" placeholder="新增待辦…" onkeydown="if(event.key==='Enter')addTodo()">
-            <button class="small-btn" onclick="addTodo()">+</button>
-          </div>
-          <ul id="todoList" class="todo-list"></ul>
         </div>
       </div>
 
@@ -276,7 +264,7 @@
   </div>
 </div>
 
-<script src="data.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="data.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
