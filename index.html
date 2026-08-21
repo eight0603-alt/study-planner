@@ -121,11 +121,22 @@
       </div>
     </header>
     <div class="daily-layout">
+
+      <!-- Left: 24h timeline -->
       <div class="daily-left">
         <div class="daily-panel">
-          <h2 class="panel-title">今日安排</h2>
-          <div id="dailyEvents"></div>
+          <h2 class="panel-title">
+            時間軸
+            <button class="small-btn" style="margin-left:auto;font-size:11px;padding:3px 10px" onclick="openAddTimeEvent()">＋ 新增</button>
+          </h2>
+          <div class="timeline-wrap">
+            <div class="timeline" id="timeline"></div>
+          </div>
         </div>
+      </div>
+
+      <!-- Right: todo + bullet notes -->
+      <div class="daily-right">
         <div class="daily-panel">
           <h2 class="panel-title">待辦清單</h2>
           <div class="todo-input-row">
@@ -134,8 +145,6 @@
           </div>
           <ul id="todoList" class="todo-list"></ul>
         </div>
-      </div>
-      <div class="daily-right">
         <div class="daily-panel daily-panel--notes">
           <h2 class="panel-title">
             子彈筆記
@@ -156,6 +165,46 @@
             <button class="small-btn" onclick="addBulletEntry()">+</button>
           </div>
           <ul id="bulletList" class="bullet-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit time event modal -->
+    <div id="timeEventModal" class="modal-overlay" onclick="closeTimeModal(event)">
+      <div class="modal" style="max-width:400px">
+        <button class="modal-close" onclick="closeTimeModal()">✕</button>
+        <h2 class="modal-title" id="timeModalTitle">新增行程</h2>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+          <div>
+            <label class="field-label">名稱</label>
+            <input id="tevcourse" class="todo-input field-input" type="text" placeholder="行程名稱">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label class="field-label">開始時間</label>
+              <input id="tevstart" class="todo-input field-input" type="time" value="09:00">
+            </div>
+            <div>
+              <label class="field-label">結束時間</label>
+              <input id="tevend" class="todo-input field-input" type="time" value="11:30">
+            </div>
+          </div>
+          <div>
+            <label class="field-label">類型</label>
+            <select id="tevtype" class="ev-type-select" style="width:100%">
+              <option value="class">上課</option>
+              <option value="review">複習</option>
+              <option value="appt">行程</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">備註（選填）</label>
+            <input id="tevnote" class="todo-input field-input" type="text" placeholder="備註">
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+            <button class="cancel-btn" onclick="closeTimeModal()">取消</button>
+            <button class="small-btn" style="padding:6px 18px" onclick="submitTimeEvent()">儲存</button>
+          </div>
         </div>
       </div>
     </div>
