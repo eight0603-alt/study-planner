@@ -253,6 +253,16 @@
           <option value="appt">行程</option>
         </select>
       </div>
+      <div class="add-ev-row" style="margin-top:8px">
+        <div style="display:flex;align-items:center;gap:6px;flex:1">
+          <label style="font-size:11px;color:var(--text-2);white-space:nowrap">開始</label>
+          <input id="newEvStart" class="todo-input" type="time" style="flex:1">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex:1">
+          <label style="font-size:11px;color:var(--text-2);white-space:nowrap">結束</label>
+          <input id="newEvEnd" class="todo-input" type="time" style="flex:1">
+        </div>
+      </div>
       <input id="newEvNote" class="todo-input" type="text" placeholder="備註（選填）" style="width:100%;margin-top:8px">
       <div class="add-ev-actions">
         <button class="small-btn" onclick="submitAddEvent()">新增</button>
