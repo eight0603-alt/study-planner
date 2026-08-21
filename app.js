@@ -700,20 +700,62 @@ function renderDaily(){
 function dailyPrev(){dailyDate=fmtDate(addDays(parseDate(dailyDate),-1));renderDaily();}
 function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDaily();}
 
+function getScheduleTodos(ds) {
+  // Return today's schedule events as todo-like objects
+  return allEventsOn(ds).map(({ev}) => ({
+    text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : ''),
+    type: ev.type,
+    course: ev.course,
+    auto: true,
+  }));
+}
+
 function renderTodos(){
-  const todos=storage(`todos-${dailyDate}`)||[];
-  const el=document.getElementById('todoList');
+  const userTodos = storage(`todos-${dailyDate}`) || [];
+  const autoTodos = getScheduleTodos(dailyDate);
+  const donedAuto = storage(`auto-done-${dailyDate}`) || [];
+  const el = document.getElementById('todoList');
   if(!el){ setTimeout(renderTodos, 150); return; }
-  if(!todos.length){
-    el.innerHTML='<li style="color:var(--text-3);font-size:12px;padding:8px 4px;list-style:none">沒有待辦，輸入後按 Enter 新增</li>';
-    return;
+
+  let html = '';
+
+  // Auto todos from schedule
+  if(autoTodos.length) {
+    html += '<li class="todo-section-label">今日行程</li>';
+    autoTodos.forEach((t, i) => {
+      const color = evColor({course: t.course, type: t.type});
+      const done = donedAuto.includes(i);
+      html += `<li class="todo-item">
+        <div class="todo-check${done?' done':''}" onclick="toggleAutoTodo(${i})"></div>
+        <span class="todo-text${done?' done':''}" style="color:${color}">${t.text}</span>
+      </li>`;
+    });
   }
-  el.innerHTML=todos.map((t,i)=>`
-    <li class="todo-item">
-      <div class="todo-check${t.done?' done':''}" onclick="toggleTodo(${i})"></div>
-      <span class="todo-text${t.done?' done':''}">${t.text}</span>
-      <button class="todo-del" onclick="deleteTodo(${i})">✕</button>
-    </li>`).join('');
+
+  // User todos
+  if(userTodos.length) {
+    html += '<li class="todo-section-label">自訂待辦</li>';
+    html += userTodos.map((t,i) => `
+      <li class="todo-item">
+        <div class="todo-check${t.done?' done':''}" onclick="toggleTodo(${i})"></div>
+        <span class="todo-text${t.done?' done':''}">${t.text}</span>
+        <button class="todo-del" onclick="deleteTodo(${i})">✕</button>
+      </li>`).join('');
+  }
+
+  if(!autoTodos.length && !userTodos.length) {
+    html = '<li style="color:var(--text-3);font-size:12px;padding:8px 4px;list-style:none">今日無行程</li>';
+  }
+
+  el.innerHTML = html;
+}
+
+function toggleAutoTodo(i) {
+  const list = storage(`auto-done-${dailyDate}`) || [];
+  const pos = list.indexOf(i);
+  if(pos === -1) list.push(i); else list.splice(pos, 1);
+  storage(`auto-done-${dailyDate}`, list);
+  renderTodos();
 }
 function addTodo(){
   const el=document.getElementById('todoInput');
@@ -757,9 +799,31 @@ function updateBulletText(idx,text){
 function deleteBullet(idx){
   const bullets=getBullets(dailyDate); bullets.splice(idx,1); saveBullets(dailyDate,bullets); renderBullets();
 }
+function ensureScheduleBullets(ds) {
+  // Auto-add schedule events as bullet entries if not done yet for this day
+  if(storage(`bullets-seeded-${ds}`)) return;
+  const items = allEventsOn(ds);
+  if(!items.length) return;
+  const bullets = getBullets(ds);
+  // Only add if bullets is empty (first visit)
+  if(bullets.length === 0) {
+    const autoEntries = items.map(({ev}) => ({
+      text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : ''),
+      status: 'todo',
+    }));
+    saveBullets(ds, autoEntries);
+  }
+  storage(`bullets-seeded-${ds}`, true);
+}
+
 function renderBullets(){
+  ensureScheduleBullets(dailyDate);
   const bullets=getBullets(dailyDate);
   const ul=document.getElementById('bulletList'); if(!ul)return;
+  if(!bullets.length){
+    ul.innerHTML='<li style="color:var(--text-3);font-size:12px;padding:8px 4px;list-style:none">輸入後按 Enter 新增筆記</li>';
+    return;
+  }
   ul.innerHTML=bullets.map((b,i)=>`
     <li class="bullet-item ${BULLET_CLASSES[b.status]||''}">
       <button class="bullet-status-btn" onclick="cycleBulletStatus(${i})" title="點擊切換狀態">${BULLET_SYMBOLS[b.status]||'•'}</button>
