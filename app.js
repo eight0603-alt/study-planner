@@ -478,29 +478,170 @@ function submitAddEvent(){
 }
 
 // ── Daily ─────────────────────────────────────────
+// ── Timeline helpers ──────────────────────────────
+const TL_START_H = 6;   // timeline starts at 6:00
+const TL_END_H   = 24;  // timeline ends at 24:00
+const TL_PX_PER_H = 60; // 60px per hour
+
+function timeToMinutes(t) {
+  const [h,m]=(t||'00:00').split(':').map(Number); return h*60+m;
+}
+function minutesToPx(minutes) {
+  return (minutes - TL_START_H*60) / 60 * TL_PX_PER_H;
+}
+function getTimeEvents(ds) { return storage(`tevents-${ds}`) || []; }
+function saveTimeEvents(ds, evs) { storage(`tevents-${ds}`, evs); }
+
+let editingTevIdx = null;
+
+function openAddTimeEvent(idx) {
+  editingTevIdx = (idx !== undefined) ? idx : null;
+  const modal = document.getElementById('timeEventModal');
+  document.getElementById('timeModalTitle').textContent = idx !== undefined ? '編輯行程' : '新增行程';
+  if (idx !== undefined) {
+    const evs = getTimeEvents(dailyDate);
+    const ev = evs[idx];
+    document.getElementById('tevcourse').value = ev.course;
+    document.getElementById('tevstart').value  = ev.start;
+    document.getElementById('tevend').value    = ev.end;
+    document.getElementById('tevtype').value   = ev.type;
+    document.getElementById('tevnote').value   = ev.note||'';
+  } else {
+    document.getElementById('tevcourse').value = '';
+    document.getElementById('tevstart').value  = '09:00';
+    document.getElementById('tevend').value    = '11:30';
+    document.getElementById('tevtype').value   = 'class';
+    document.getElementById('tevnote').value   = '';
+  }
+  modal.classList.add('open');
+}
+
+function closeTimeModal(e) {
+  if(!e || e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+    document.getElementById('timeEventModal').classList.remove('open');
+  }
+}
+
+function submitTimeEvent() {
+  const course = document.getElementById('tevcourse').value.trim();
+  const start  = document.getElementById('tevstart').value;
+  const end    = document.getElementById('tevend').value;
+  const type   = document.getElementById('tevtype').value;
+  const note   = document.getElementById('tevnote').value.trim();
+  if (!course) { alert('請輸入名稱'); return; }
+  if (start >= end) { alert('結束時間必須晚於開始時間'); return; }
+  const evs = getTimeEvents(dailyDate);
+  const ev = {course, start, end, type, note};
+  if (editingTevIdx !== null) {
+    evs[editingTevIdx] = ev;
+  } else {
+    evs.push(ev);
+  }
+  // Sort by start time
+  evs.sort((a,b) => a.start.localeCompare(b.start));
+  saveTimeEvents(dailyDate, evs);
+  document.getElementById('timeEventModal').classList.remove('open');
+  renderTimeline();
+}
+
+function deleteTimeEvent(idx) {
+  const evs = getTimeEvents(dailyDate);
+  evs.splice(idx,1);
+  saveTimeEvents(dailyDate, evs);
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const tl = document.getElementById('timeline');
+  if (!tl) return;
+  tl.innerHTML = '';
+
+  const totalHours = TL_END_H - TL_START_H;
+  const totalPx    = totalHours * TL_PX_PER_H;
+
+  // Hour labels + grid lines
+  for (let h = TL_START_H; h <= TL_END_H; h++) {
+    const label = document.createElement('div');
+    label.className = 'tl-hour';
+    label.style.gridRow = `${h - TL_START_H + 1}`;
+    label.textContent = h === TL_END_H ? '' : String(h).padStart(2,'0') + ':00';
+    tl.appendChild(label);
+  }
+
+  // Event column
+  const col = document.createElement('div');
+  col.className = 'tl-col';
+  col.style.height = totalPx + 'px';
+
+  // Half-hour lines
+  for (let h = TL_START_H; h < TL_END_H; h++) {
+    const line = document.createElement('div');
+    line.className = 'tl-line';
+    line.style.top = ((h - TL_START_H + 0.5) * TL_PX_PER_H) + 'px';
+    col.appendChild(line);
+  }
+
+  // Now indicator
+  const now = new Date();
+  const nowMinutes = now.getHours()*60 + now.getMinutes();
+  if (dailyDate === todayStr() && nowMinutes >= TL_START_H*60 && nowMinutes <= TL_END_H*60) {
+    const nowLine = document.createElement('div');
+    nowLine.className = 'tl-now';
+    nowLine.style.top = minutesToPx(nowMinutes) + 'px';
+    col.appendChild(nowLine);
+  }
+
+  // Built-in schedule events (from course schedule) — shown with default times if no time set
+  const builtinItems = allEventsOn(dailyDate);
+  const SLOT_TIMES = {
+    class:  {start:'09:00', end:'11:30'},
+    review: {start:'14:00', end:'16:30'},
+    appt:   {start:'10:00', end:'12:00'},
+  };
+
+  // Render user-added time events
+  const tevs = getTimeEvents(dailyDate);
+  tevs.forEach((ev, i) => {
+    const color = ev.type==='appt' ? (APPT_COLORS[ev.course]||'#D29922') : courseColor(ev.course);
+    const top    = minutesToPx(timeToMinutes(ev.start));
+    const height = Math.max(22, minutesToPx(timeToMinutes(ev.end)) - top);
+    const chip   = document.createElement('div');
+    chip.className = 'tl-event';
+    chip.style.cssText = `top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}55`;
+    chip.innerHTML = `
+      <div class="tl-event-name">${ev.course}</div>
+      <div class="tl-event-time">${ev.start}–${ev.end}${ev.note?' · '+ev.note:''}</div>
+      <button class="tl-event-del" onclick="event.stopPropagation();deleteTimeEvent(${i})">✕</button>`;
+    chip.onclick = () => openAddTimeEvent(i);
+    col.appendChild(chip);
+  });
+
+  // Show built-in events as "unscheduled" below timeline if no matching time event
+  const scheduledCourses = new Set(tevs.map(e=>e.course));
+  const unscheduled = builtinItems.filter(({ev})=>!scheduledCourses.has(ev.course));
+  if (unscheduled.length) {
+    const sep = document.createElement('div');
+    sep.style.cssText = `position:absolute;bottom:-${36 + unscheduled.length*42}px;left:0;right:0`;
+    sep.innerHTML = `<div style="font-size:11px;color:var(--text-3);padding:8px 4px 4px;border-top:1px dashed var(--border)">未設定時間</div>`;
+    unscheduled.forEach(({ev})=>{
+      const color = evColor(ev);
+      const row = document.createElement('div');
+      row.className='tl-event';
+      row.style.cssText=`position:relative;top:0;height:auto;min-height:32px;margin:2px 4px;background:${color}22;color:${color};border:1px dashed ${color}55`;
+      row.innerHTML=`<div class="tl-event-name">${ev.course} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>`;
+      sep.appendChild(row);
+    });
+    col.appendChild(sep);
+    col.style.marginBottom = (50 + unscheduled.length*42) + 'px';
+  }
+
+  tl.appendChild(col);
+}
+
 function renderDaily(){
   const d=parseDate(dailyDate);
   document.getElementById('dailyDateLabel').textContent=`${dailyDate} 週${WEEKDAYS_CN[d.getDay()]}`;
-  const items=allEventsOn(dailyDate);
-  const completed=getCompleted(dailyDate);
-  const evEl=document.getElementById('dailyEvents');
-  if(!items.length){evEl.innerHTML=`<p class="empty-state">今日無行程，<button class="link-btn" onclick="openDayModal('${dailyDate}')">點此新增</button></p>`;}
-  else evEl.innerHTML=items.map(({ev,srcType,srcIdx})=>{
-    const color=evColor(ev);
-    const isBuiltin=srcType==='builtin';
-    const done=isBuiltin&&completed.includes(srcIdx);
-    return `<div class="schedule-item${done?' ev-done':''}">
-      <div class="schedule-dot" style="background:${color}"></div>
-      <div style="flex:1">
-        <div class="schedule-course">${ev.course}
-          <span class="badge ${badgeClass(ev.type)}">${badgeLabel(ev.type)}</span>
-          ${done?'<span class="badge" style="background:rgba(63,185,80,.15);color:var(--accent-2)">✓</span>':''}
-        </div>
-        <div class="schedule-detail">${ev.label||''} ${ev.progress&&ev.progress!=='—'?'('+ev.progress+')':''}</div>
-      </div>
-      ${isBuiltin?`<button class="ev-action-btn" onclick="toggleModalDone('${dailyDate}',${srcIdx})">${done?'↩':'✓'}</button>`:''}
-    </div>`;
-  }).join('');
+  renderTimeline();
   renderTodos();
   renderBullets();
 }
