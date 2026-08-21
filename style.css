@@ -716,7 +716,5 @@ body { display: flex; }
 }
 .field-input:focus { border-color: var(--accent); }
 
-/* ── 2-column daily layout ───────────────────────── */
-.daily-layout--2col {
-  grid-template-columns: 1fr 1fr;
-}
+/* ── 2-col daily layout (timeline + bullet) ─────── */
+.daily-layout--2col { grid-template-columns: 1fr 1fr; }
