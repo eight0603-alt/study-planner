@@ -35,6 +35,25 @@ function saveCustomEvents(ds, evs)  { storage(`custom-${ds}`, evs); }
 function getMovedEvents(ds)         { return storage(`moved-${ds}`)  || []; }
 function saveMovedEvents(ds, evs)   { storage(`moved-${ds}`, evs); }
 function getCompleted(ds)           { return storage(`completed-${ds}`) || []; }
+function isDone(ds, srcType, srcIdx) {
+  if (srcType === 'builtin') return getCompleted(ds).includes(srcIdx);
+  return storage(`done-${ds}-${srcType}-${srcIdx}`) || false;
+}
+function toggleAnyDone(ds, srcType, srcIdx) {
+  if (srcType === 'builtin') {
+    const list = getCompleted(ds);
+    const pos  = list.indexOf(srcIdx);
+    if (pos === -1) list.push(srcIdx); else list.splice(pos, 1);
+    storage(`completed-${ds}`, list);
+  } else {
+    const key = `done-${ds}-${srcType}-${srcIdx}`;
+    storage(key, !storage(key));
+  }
+  renderModalContent();
+  if (document.getElementById('view-daily').classList.contains('active')) renderDaily();
+  const cont = document.querySelector(`.ev-container[data-ds="${ds}"]`);
+  if (cont) buildCalDayEvents(cont, ds);
+}
 
 // ── All events for a day ──────────────────────────
 // Returns [{ev, srcType:'builtin'|'moved'|'custom', srcIdx}]
@@ -65,10 +84,14 @@ function courseColor(name) {
   const c = SCHEDULE_DATA.courses.find(x=>x.name===name);
   return c ? c.color : (APPT_COLORS[name]||'#8B949E');
 }
+const TYPE_FALLBACK_COLORS = {class:'#58A6FF', review:'#3FB950', appt:'#D29922'};
 function evColor(ev) {
   if (!ev) return '#8B949E';
-  if (ev.type==='appt') return APPT_COLORS[ev.course]||'#D29922';
-  return courseColor(ev.course);
+  if (ev.type==='appt') return APPT_COLORS[ev.course] || '#D29922';
+  const c = SCHEDULE_DATA.courses.find(x=>x.name===ev.course);
+  if (c) return c.color;
+  // Custom event: use type-based color
+  return TYPE_FALLBACK_COLORS[ev.type] || '#8B949E';
 }
 function badgeClass(t) { return t==='class'?'badge-class':t==='review'?'badge-review':'badge-appt'; }
 function badgeLabel(t) { return t==='class'?'上課':t==='review'?'複習':'行程'; }
@@ -355,7 +378,6 @@ function openDayModal(ds) {
 function renderModalContent() {
   const ds=modalDate;
   const items=allEventsOn(ds);
-  const completed=getCompleted(ds);
   let html='';
 
   if(!items.length) html='<p class="empty-state">無排定行程，可在下方新增</p>';
@@ -363,7 +385,7 @@ function renderModalContent() {
   items.forEach(({ev,srcType,srcIdx},i)=>{
     const color=evColor(ev);
     const isBuiltin=srcType==='builtin';
-    const done=isBuiltin && completed.includes(srcIdx);
+    const done=isDone(ds, srcType, srcIdx);
     const isMoved=srcType==='moved';
     const isCustom=srcType==='custom';
 
@@ -379,9 +401,8 @@ function renderModalContent() {
         <div class="schedule-detail">${ev.label||''} ${ev.progress&&ev.progress!=='—'?'('+ev.progress+')':''}</div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="ev-action-btn" onclick="setTimeForEvent('${ds}','${srcType}',${srcIdx},\`${ev.course}\`,\`${ev.type}\`)" title="設定時間">⏱</button>
         <button class="ev-action-btn" onclick="editModalEvent('${ds}','${srcType}',${srcIdx})" title="編輯">✎</button>
-        ${isBuiltin?`<button class="ev-action-btn" onclick="toggleModalDone('${ds}',${srcIdx})" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>`:''}
+        <button class="ev-action-btn" onclick="toggleAnyDone('${ds}','${srcType}',${srcIdx})" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>
         <button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>
       </div>
     </div>`;
@@ -492,29 +513,6 @@ function submitAddEvent(){
   const cont=document.querySelector(`.ev-container[data-ds="${modalDate}"]`);
   if(cont) buildCalDayEvents(cont,modalDate);
 }
-// Set/edit time for any event (opens timeline time-event modal pre-filled)
-function setTimeForEvent(ds, srcType, srcIdx, courseName, courseType) {
-  // Find existing time event for this course on this day
-  const tevs = getTimeEvents(ds);
-  const existIdx = tevs.findIndex(e => e.course === courseName);
-  if (existIdx >= 0) {
-    // Edit existing
-    modalDate = ds;
-    openAddTimeEvent(existIdx);
-  } else {
-    // Create new pre-filled
-    modalDate = ds;
-    editingTevIdx = null;
-    document.getElementById('timeModalTitle').textContent = '設定時間';
-    document.getElementById('tevcourse').value = courseName;
-    document.getElementById('tevtype').value = courseType || 'class';
-    document.getElementById('tevstart').value = '09:00';
-    document.getElementById('tevend').value   = '11:30';
-    document.getElementById('tevnote').value  = '';
-    document.getElementById('timeEventModal').classList.add('open');
-  }
-}
-
 
 // ── Daily ─────────────────────────────────────────
 // ── Timeline helpers ──────────────────────────────
