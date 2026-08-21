@@ -630,7 +630,6 @@ function deleteTimeEvent(idx) {
 function renderTimeline() {
   const tl = document.getElementById('timeline');
   if (!tl) return;
-  try {
 
   const totalHours = TL_END_H - TL_START_H;
   const totalPx    = totalHours * TL_PX_PER_H;
@@ -689,15 +688,14 @@ function renderTimeline() {
   }
 
   tl.innerHTML = html;
-  } catch(e) { console.error('timeline inner error:', e); if(tl) tl.innerHTML='<p style="color:var(--text-3);padding:12px">時間軸載入中...</p>'; }
 }
 
 function renderDaily(){
   const d=parseDate(dailyDate);
   document.getElementById('dailyDateLabel').textContent=`${dailyDate} 週${WEEKDAYS_CN[d.getDay()]}`;
-  try { renderTimeline(); } catch(e) { console.error('renderTimeline error:', e); }
-  try { renderTodos(); } catch(e) { console.error('renderTodos error:', e); }
-  try { renderBullets(); } catch(e) { console.error('renderBullets error:', e); }
+  renderTimeline();
+  renderTodos();
+  renderBullets();
 }
 function dailyPrev(){dailyDate=fmtDate(addDays(parseDate(dailyDate),-1));renderDaily();}
 function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDaily();}
@@ -705,7 +703,11 @@ function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDa
 function renderTodos(){
   const todos=storage(`todos-${dailyDate}`)||[];
   const el=document.getElementById('todoList');
-  if(!el){ console.warn('todoList element not found'); return; }
+  if(!el){ setTimeout(renderTodos, 150); return; }
+  if(!todos.length){
+    el.innerHTML='<li style="color:var(--text-3);font-size:12px;padding:8px 4px;list-style:none">沒有待辦，輸入後按 Enter 新增</li>';
+    return;
+  }
   el.innerHTML=todos.map((t,i)=>`
     <li class="todo-item">
       <div class="todo-check${t.done?' done':''}" onclick="toggleTodo(${i})"></div>
@@ -714,9 +716,15 @@ function renderTodos(){
     </li>`).join('');
 }
 function addTodo(){
-  const el=document.getElementById('todoInput'); const t=el.value.trim(); if(!t)return;
-  const todos=storage(`todos-${dailyDate}`)||[]; todos.push({text:t,done:false});
-  storage(`todos-${dailyDate}`,todos); el.value=''; renderTodos();
+  const el=document.getElementById('todoInput');
+  if(!el) return;
+  const t=el.value.trim();
+  if(!t) return;
+  const todos=storage(`todos-${dailyDate}`)||[];
+  todos.push({text:t,done:false});
+  storage(`todos-${dailyDate}`,todos);
+  el.value='';
+  renderTodos();
 }
 function toggleTodo(i){
   const todos=storage(`todos-${dailyDate}`)||[]; todos[i].done=!todos[i].done;
