@@ -122,8 +122,8 @@
     </header>
     <div class="daily-layout">
 
-      <!-- Left: 24h timeline -->
-      <div class="daily-left">
+      <!-- 時間軸 -->
+      <div class="daily-col">
         <div class="daily-panel">
           <h2 class="panel-title">
             時間軸
@@ -135,8 +135,8 @@
         </div>
       </div>
 
-      <!-- Right: todo + bullet notes -->
-      <div class="daily-right">
+      <!-- 待辦清單 -->
+      <div class="daily-col">
         <div class="daily-panel">
           <h2 class="panel-title">待辦清單</h2>
           <div class="todo-input-row">
@@ -145,6 +145,10 @@
           </div>
           <ul id="todoList" class="todo-list"></ul>
         </div>
+      </div>
+
+      <!-- 子彈筆記 -->
+      <div class="daily-col">
         <div class="daily-panel daily-panel--notes">
           <h2 class="panel-title">
             子彈筆記
@@ -169,7 +173,7 @@
       </div>
     </div>
 
-    <!-- Add/Edit time event modal -->
+    <!-- 新增/編輯時間行程 Modal -->
     <div id="timeEventModal" class="modal-overlay" onclick="closeTimeModal(event)">
       <div class="modal" style="max-width:400px">
         <button class="modal-close" onclick="closeTimeModal()">✕</button>
