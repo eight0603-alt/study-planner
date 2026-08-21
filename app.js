@@ -379,6 +379,7 @@ function renderModalContent() {
         <div class="schedule-detail">${ev.label||''} ${ev.progress&&ev.progress!=='—'?'('+ev.progress+')':''}</div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
+        <button class="ev-action-btn" onclick="setTimeForEvent('${ds}','${srcType}',${srcIdx},\`${ev.course}\`,\`${ev.type}\`)" title="設定時間">⏱</button>
         <button class="ev-action-btn" onclick="editModalEvent('${ds}','${srcType}',${srcIdx})" title="編輯">✎</button>
         ${isBuiltin?`<button class="ev-action-btn" onclick="toggleModalDone('${ds}',${srcIdx})" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>`:''}
         <button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>
@@ -491,6 +492,29 @@ function submitAddEvent(){
   const cont=document.querySelector(`.ev-container[data-ds="${modalDate}"]`);
   if(cont) buildCalDayEvents(cont,modalDate);
 }
+// Set/edit time for any event (opens timeline time-event modal pre-filled)
+function setTimeForEvent(ds, srcType, srcIdx, courseName, courseType) {
+  // Find existing time event for this course on this day
+  const tevs = getTimeEvents(ds);
+  const existIdx = tevs.findIndex(e => e.course === courseName);
+  if (existIdx >= 0) {
+    // Edit existing
+    modalDate = ds;
+    openAddTimeEvent(existIdx);
+  } else {
+    // Create new pre-filled
+    modalDate = ds;
+    editingTevIdx = null;
+    document.getElementById('timeModalTitle').textContent = '設定時間';
+    document.getElementById('tevcourse').value = courseName;
+    document.getElementById('tevtype').value = courseType || 'class';
+    document.getElementById('tevstart').value = '09:00';
+    document.getElementById('tevend').value   = '11:30';
+    document.getElementById('tevnote').value  = '';
+    document.getElementById('timeEventModal').classList.add('open');
+  }
+}
+
 
 // ── Daily ─────────────────────────────────────────
 // ── Timeline helpers ──────────────────────────────
