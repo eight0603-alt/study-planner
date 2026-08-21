@@ -716,14 +716,7 @@ body { display: flex; }
 }
 .field-input:focus { border-color: var(--accent); }
 
-/* ── Todo section labels ─────────────────────────── */
-.todo-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
-  padding: 10px 4px 4px;
-  list-style: none;
+/* ── 2-column daily layout ───────────────────────── */
+.daily-layout--2col {
+  grid-template-columns: 1fr 1fr;
 }
-.todo-section-label:first-child { padding-top: 2px; }
