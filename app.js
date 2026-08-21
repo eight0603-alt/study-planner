@@ -47,6 +47,18 @@ function allEventsOn(ds) {
   });
   getMovedEvents(ds).forEach((ev, i) => result.push({ev, srcType:'moved', srcIdx:i}));
   getCustomEvents(ds).forEach((ev, i) => result.push({ev, srcType:'custom', srcIdx:i}));
+
+  // Sort by start time if available; events without time go last
+  const tevs = getTimeEvents(ds);
+  const timeMap = {};
+  tevs.forEach(t => { timeMap[t.course] = t.start; });
+
+  result.sort((a, b) => {
+    const ta = timeMap[a.ev.course] || 'ZZ:ZZ';
+    const tb = timeMap[b.ev.course] || 'ZZ:ZZ';
+    return ta.localeCompare(tb);
+  });
+
   return result;
 }
 // Legacy compat
@@ -802,15 +814,21 @@ function deleteBullet(idx){
 function ensureScheduleBullets(ds) {
   // Auto-add schedule events as bullet entries if not done yet for this day
   if(storage(`bullets-seeded-${ds}`)) return;
-  const items = allEventsOn(ds);
+  const items = allEventsOn(ds);  // already sorted by time from allEventsOn
   if(!items.length) return;
   const bullets = getBullets(ds);
   // Only add if bullets is empty (first visit)
   if(bullets.length === 0) {
-    const autoEntries = items.map(({ev}) => ({
-      text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : ''),
-      status: 'todo',
-    }));
+    const tevs = getTimeEvents(ds);
+    const timeMap = {};
+    tevs.forEach(t => { timeMap[t.course] = `${t.start}–${t.end}`; });
+    const autoEntries = items.map(({ev}) => {
+      const timeStr = timeMap[ev.course] ? ` (${timeMap[ev.course]})` : '';
+      return {
+        text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : '') + timeStr,
+        status: 'todo',
+      };
+    });
     saveBullets(ds, autoEntries);
   }
   storage(`bullets-seeded-${ds}`, true);
