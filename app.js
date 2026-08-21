@@ -462,15 +462,30 @@ function showAddEventForm(){
   f.style.display=f.style.display==='none'?'block':'none';
 }
 function submitAddEvent(){
-  const name=document.getElementById('newEvName').value.trim();
-  const type=document.getElementById('newEvType').value;
-  const note=document.getElementById('newEvNote').value.trim();
+  const name  = document.getElementById('newEvName').value.trim();
+  const type  = document.getElementById('newEvType').value;
+  const note  = document.getElementById('newEvNote').value.trim();
+  const start = document.getElementById('newEvStart')?.value || '';
+  const end   = document.getElementById('newEvEnd')?.value   || '';
   if(!name){alert('請輸入行程名稱');return;}
+
+  // Save to custom events (shows on calendar)
   const evs=getCustomEvents(modalDate);
-  evs.push({course:name,type,label:note,progress:'',custom:true});
+  evs.push({course:name, type, label:start&&end?`${start}–${end}`:note, progress:'', custom:true});
   saveCustomEvents(modalDate,evs);
+
+  // If times provided, also save as time event (shows on daily timeline)
+  if(start && end && start < end){
+    const tevs=getTimeEvents(modalDate);
+    tevs.push({course:name, type, start, end, note});
+    tevs.sort((a,b)=>a.start.localeCompare(b.start));
+    saveTimeEvents(modalDate,tevs);
+  }
+
   document.getElementById('newEvName').value='';
   document.getElementById('newEvNote').value='';
+  if(document.getElementById('newEvStart')) document.getElementById('newEvStart').value='';
+  if(document.getElementById('newEvEnd'))   document.getElementById('newEvEnd').value='';
   document.getElementById('addEventForm').style.display='none';
   renderModalContent();
   const cont=document.querySelector(`.ev-container[data-ds="${modalDate}"]`);
@@ -554,88 +569,64 @@ function deleteTimeEvent(idx) {
 function renderTimeline() {
   const tl = document.getElementById('timeline');
   if (!tl) return;
-  tl.innerHTML = '';
 
   const totalHours = TL_END_H - TL_START_H;
   const totalPx    = totalHours * TL_PX_PER_H;
 
-  // Hour labels + grid lines
+  // Build HTML: left labels column + right event column
+  let html = `<div class="tl-labels">`;
   for (let h = TL_START_H; h <= TL_END_H; h++) {
-    const label = document.createElement('div');
-    label.className = 'tl-hour';
-    label.style.gridRow = `${h - TL_START_H + 1}`;
-    label.textContent = h === TL_END_H ? '' : String(h).padStart(2,'0') + ':00';
-    tl.appendChild(label);
+    html += `<div class="tl-hour-label">${h < TL_END_H ? String(h).padStart(2,'0')+':00' : ''}</div>`;
   }
+  html += `</div><div class="tl-col" style="height:${totalPx}px">`;
 
-  // Event column
-  const col = document.createElement('div');
-  col.className = 'tl-col';
-  col.style.height = totalPx + 'px';
-
-  // Half-hour lines
+  // Hour + half-hour lines
   for (let h = TL_START_H; h < TL_END_H; h++) {
-    const line = document.createElement('div');
-    line.className = 'tl-line';
-    line.style.top = ((h - TL_START_H + 0.5) * TL_PX_PER_H) + 'px';
-    col.appendChild(line);
+    const topH  = (h - TL_START_H) * TL_PX_PER_H;
+    const topHH = topH + TL_PX_PER_H * 0.5;
+    html += `<div class="tl-line tl-line-hour"  style="top:${topH}px"></div>`;
+    html += `<div class="tl-line tl-line-half"  style="top:${topHH}px"></div>`;
   }
 
   // Now indicator
   const now = new Date();
-  const nowMinutes = now.getHours()*60 + now.getMinutes();
-  if (dailyDate === todayStr() && nowMinutes >= TL_START_H*60 && nowMinutes <= TL_END_H*60) {
-    const nowLine = document.createElement('div');
-    nowLine.className = 'tl-now';
-    nowLine.style.top = minutesToPx(nowMinutes) + 'px';
-    col.appendChild(nowLine);
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  if (dailyDate === todayStr() && nowMin >= TL_START_H*60 && nowMin < TL_END_H*60) {
+    html += `<div class="tl-now" style="top:${minutesToPx(nowMin)}px"></div>`;
   }
 
-  // Built-in schedule events (from course schedule) — shown with default times if no time set
-  const builtinItems = allEventsOn(dailyDate);
-  const SLOT_TIMES = {
-    class:  {start:'09:00', end:'11:30'},
-    review: {start:'14:00', end:'16:30'},
-    appt:   {start:'10:00', end:'12:00'},
-  };
-
-  // Render user-added time events
+  // User-added time events
   const tevs = getTimeEvents(dailyDate);
   tevs.forEach((ev, i) => {
-    const color = ev.type==='appt' ? (APPT_COLORS[ev.course]||'#D29922') : courseColor(ev.course);
+    const color  = ev.type==='appt'?(APPT_COLORS[ev.course]||'#D29922'):courseColor(ev.course);
     const top    = minutesToPx(timeToMinutes(ev.start));
-    const height = Math.max(22, minutesToPx(timeToMinutes(ev.end)) - top);
-    const chip   = document.createElement('div');
-    chip.className = 'tl-event';
-    chip.style.cssText = `top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}55`;
-    chip.innerHTML = `
+    const height = Math.max(24, minutesToPx(timeToMinutes(ev.end)) - top);
+    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44"
+              onclick="openAddTimeEvent(${i})">
       <div class="tl-event-name">${ev.course}</div>
       <div class="tl-event-time">${ev.start}–${ev.end}${ev.note?' · '+ev.note:''}</div>
-      <button class="tl-event-del" onclick="event.stopPropagation();deleteTimeEvent(${i})">✕</button>`;
-    chip.onclick = () => openAddTimeEvent(i);
-    col.appendChild(chip);
+      <button class="tl-event-del" onclick="event.stopPropagation();deleteTimeEvent(${i})">✕</button>
+    </div>`;
   });
 
-  // Show built-in events as "unscheduled" below timeline if no matching time event
+  html += '</div>';
+
+  // Unscheduled built-in events below
   const scheduledCourses = new Set(tevs.map(e=>e.course));
-  const unscheduled = builtinItems.filter(({ev})=>!scheduledCourses.has(ev.course));
+  const unscheduled = allEventsOn(dailyDate).filter(({ev})=>!scheduledCourses.has(ev.course));
   if (unscheduled.length) {
-    const sep = document.createElement('div');
-    sep.style.cssText = `position:absolute;bottom:-${36 + unscheduled.length*42}px;left:0;right:0`;
-    sep.innerHTML = `<div style="font-size:11px;color:var(--text-3);padding:8px 4px 4px;border-top:1px dashed var(--border)">未設定時間</div>`;
+    html += `<div class="tl-unscheduled">
+      <div class="tl-unsched-label">未設定時間</div>`;
     unscheduled.forEach(({ev})=>{
-      const color = evColor(ev);
-      const row = document.createElement('div');
-      row.className='tl-event';
-      row.style.cssText=`position:relative;top:0;height:auto;min-height:32px;margin:2px 4px;background:${color}22;color:${color};border:1px dashed ${color}55`;
-      row.innerHTML=`<div class="tl-event-name">${ev.course} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>`;
-      sep.appendChild(row);
+      const color=evColor(ev);
+      html+=`<div class="tl-event tl-event-unsched" style="background:${color}22;color:${color};border:1px dashed ${color}55">
+        <div class="tl-event-name">${ev.course} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>
+      </div>`;
     });
-    col.appendChild(sep);
-    col.style.marginBottom = (50 + unscheduled.length*42) + 'px';
+    html += '</div>';
   }
 
-  tl.appendChild(col);
+  tl.innerHTML = html;
 }
 
 function renderDaily(){
