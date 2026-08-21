@@ -243,8 +243,11 @@ function buildCalDayEvents(container, ds) {
     const color=evColor(ev);
     const chip=document.createElement('div');
     chip.className=`cal-event${ev.type==='review'?' review':ev.type==='appt'?' appt':''}`;
-    chip.style.cssText=`background:${color}22;color:${color}`;
-    chip.textContent=ev.course;
+    const completed=getCompleted(ds);
+    const doneKey=`${srcType}-${srcIdx}`;
+    const isDone=completed.includes(doneKey);
+    chip.style.cssText=`background:${color}22;color:${color}${isDone?';opacity:0.45;text-decoration:line-through':''}`;
+    chip.textContent=(isDone?'✓ ':'')+ev.course;
     chip.draggable=true;
     chip.title=`${ev.course}　拖曳=移動　點擊=編輯`;
     chip.dataset.pos=String(pos);
@@ -499,6 +502,19 @@ function closeDayModal(e) {
 function showAddEventForm(){
   const f=document.getElementById('addEventForm');
   f.style.display=f.style.display==='none'?'block':'none';
+  if(f.style.display!=='none'){
+    // Populate datalist with course names
+    let dl=document.getElementById('courseNameList');
+    if(!dl){
+      dl=document.createElement('datalist');
+      dl.id='courseNameList';
+      SCHEDULE_DATA.courses.forEach(c=>{
+        const opt=document.createElement('option'); opt.value=c.name; dl.appendChild(opt);
+      });
+      document.body.appendChild(dl);
+      document.getElementById('newEvName').setAttribute('list','courseNameList');
+    }
+  }
 }
 function submitAddEvent(){
   const name  = document.getElementById('newEvName').value.trim();
