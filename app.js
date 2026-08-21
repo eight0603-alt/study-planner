@@ -705,9 +705,15 @@ function renderTimeline() {
 function renderDaily(){
   const d=parseDate(dailyDate);
   document.getElementById('dailyDateLabel').textContent=`${dailyDate} 週${WEEKDAYS_CN[d.getDay()]}`;
-  renderTimeline();
-  renderTodos();
-  renderBullets();
+  try { renderTimeline(); } catch(e) { console.error('renderTimeline:', e); }
+  try { renderBullets(); } catch(e) { console.error('renderBullets:', e); }
+  try {
+    const notesEl = document.getElementById('dailyNotes');
+    if(notesEl) {
+      notesEl.value = storage(`dnotes-${dailyDate}`) || '';
+      notesEl.oninput = () => storage(`dnotes-${dailyDate}`, notesEl.value);
+    }
+  } catch(e) { console.error('renderNotes:', e); }
 }
 function dailyPrev(){dailyDate=fmtDate(addDays(parseDate(dailyDate),-1));renderDaily();}
 function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDaily();}
