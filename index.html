@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -120,7 +120,7 @@
         <button class="icon-btn" onclick="dailyNext()">&#8594;</button>
       </div>
     </header>
-    <div class="daily-layout daily-layout--2col">
+    <div class="daily-layout daily-layout--3col">
 
       <!-- 時間軸 -->
       <div class="daily-col">
@@ -157,6 +157,19 @@
             <button class="small-btn" onclick="addBulletEntry()">+</button>
           </div>
           <ul id="bulletList" class="bullet-list"></ul>
+        </div>
+      </div>
+
+      <!-- 學習心得 -->
+      <div class="daily-col">
+        <div class="daily-panel daily-panel--notes">
+          <h2 class="panel-title">
+            學習心得
+            <span class="panel-hint">自動儲存</span>
+          </h2>
+          <textarea id="dailyNotes"
+            class="daily-notes-textarea"
+            placeholder="今日學習心得、重點摘要、待複習內容…"></textarea>
         </div>
       </div>
     </div>
@@ -264,7 +277,7 @@
   </div>
 </div>
 
-<script src="data.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="data.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
