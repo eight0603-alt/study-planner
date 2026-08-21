@@ -718,3 +718,23 @@ body { display: flex; }
 
 /* ── 2-col daily layout (timeline + bullet) ─────── */
 .daily-layout--2col { grid-template-columns: 1fr 1fr; }
+
+/* ── 3-col daily layout ──────────────────────────── */
+.daily-layout--3col { grid-template-columns: 1fr 1fr 1fr; }
+
+/* ── Daily notes textarea ────────────────────────── */
+.daily-notes-textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text);
+  resize: vertical;
+}
+.daily-notes-textarea:focus { border-color: var(--accent); outline: none; }
