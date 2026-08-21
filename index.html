@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -160,46 +160,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 新增/編輯時間行程 Modal -->
-    <div id="timeEventModal" class="modal-overlay" onclick="closeTimeModal(event)">
-      <div class="modal" style="max-width:400px">
-        <button class="modal-close" onclick="closeTimeModal()">✕</button>
-        <h2 class="modal-title" id="timeModalTitle">新增行程</h2>
-        <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
-          <div>
-            <label class="field-label">名稱</label>
-            <input id="tevcourse" class="todo-input field-input" type="text" placeholder="行程名稱">
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div>
-              <label class="field-label">開始時間</label>
-              <input id="tevstart" class="todo-input field-input" type="time" value="09:00">
-            </div>
-            <div>
-              <label class="field-label">結束時間</label>
-              <input id="tevend" class="todo-input field-input" type="time" value="11:30">
-            </div>
-          </div>
-          <div>
-            <label class="field-label">類型</label>
-            <select id="tevtype" class="ev-type-select" style="width:100%">
-              <option value="class">上課</option>
-              <option value="review">複習</option>
-              <option value="appt">行程</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label">備註（選填）</label>
-            <input id="tevnote" class="todo-input field-input" type="text" placeholder="備註">
-          </div>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-            <button class="cancel-btn" onclick="closeTimeModal()">取消</button>
-            <button class="small-btn" style="padding:6px 18px" onclick="submitTimeEvent()">儲存</button>
-          </div>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- ── Habits ── -->
@@ -264,7 +224,47 @@
   </div>
 </div>
 
-<script src="data.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<!-- ── Time Event Modal (global, works from any view) ── -->
+<div id="timeEventModal" class="modal-overlay" onclick="closeTimeModal(event)">
+  <div class="modal" style="max-width:400px">
+    <button class="modal-close" onclick="closeTimeModal()">✕</button>
+    <h2 class="modal-title" id="timeModalTitle">設定時間</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+      <div>
+        <label class="field-label">名稱</label>
+        <input id="tevcourse" class="todo-input field-input" type="text" placeholder="行程名稱">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label class="field-label">開始時間</label>
+          <input id="tevstart" class="todo-input field-input" type="time" value="09:00">
+        </div>
+        <div>
+          <label class="field-label">結束時間</label>
+          <input id="tevend" class="todo-input field-input" type="time" value="11:30">
+        </div>
+      </div>
+      <div>
+        <label class="field-label">類型</label>
+        <select id="tevtype" class="ev-type-select" style="width:100%">
+          <option value="class">上課</option>
+          <option value="review">複習</option>
+          <option value="appt">行程</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">備註（選填）</label>
+        <input id="tevnote" class="todo-input field-input" type="text" placeholder="備註">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="cancel-btn" onclick="closeTimeModal()">取消</button>
+        <button class="small-btn" style="padding:6px 18px" onclick="submitTimeEvent()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="data.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
