@@ -630,6 +630,7 @@ function deleteTimeEvent(idx) {
 function renderTimeline() {
   const tl = document.getElementById('timeline');
   if (!tl) return;
+  try {
 
   const totalHours = TL_END_H - TL_START_H;
   const totalPx    = totalHours * TL_PX_PER_H;
@@ -688,21 +689,24 @@ function renderTimeline() {
   }
 
   tl.innerHTML = html;
+  } catch(e) { console.error('timeline inner error:', e); if(tl) tl.innerHTML='<p style="color:var(--text-3);padding:12px">時間軸載入中...</p>'; }
 }
 
 function renderDaily(){
   const d=parseDate(dailyDate);
   document.getElementById('dailyDateLabel').textContent=`${dailyDate} 週${WEEKDAYS_CN[d.getDay()]}`;
-  renderTimeline();
-  renderTodos();
-  renderBullets();
+  try { renderTimeline(); } catch(e) { console.error('renderTimeline error:', e); }
+  try { renderTodos(); } catch(e) { console.error('renderTodos error:', e); }
+  try { renderBullets(); } catch(e) { console.error('renderBullets error:', e); }
 }
 function dailyPrev(){dailyDate=fmtDate(addDays(parseDate(dailyDate),-1));renderDaily();}
 function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDaily();}
 
 function renderTodos(){
   const todos=storage(`todos-${dailyDate}`)||[];
-  document.getElementById('todoList').innerHTML=todos.map((t,i)=>`
+  const el=document.getElementById('todoList');
+  if(!el){ console.warn('todoList element not found'); return; }
+  el.innerHTML=todos.map((t,i)=>`
     <li class="todo-item">
       <div class="todo-check${t.done?' done':''}" onclick="toggleTodo(${i})"></div>
       <span class="todo-text${t.done?' done':''}">${t.text}</span>
