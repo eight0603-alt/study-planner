@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -246,7 +246,7 @@
     <!-- Add event form (hidden by default) -->
     <div id="addEventForm" style="display:none" class="add-ev-form">
       <div class="add-ev-row">
-        <input id="newEvName" class="todo-input" type="text" placeholder="行程名稱（例：稅法補課）">
+        <input id="newEvName" class="todo-input" type="text" placeholder="行程名稱（例：稅法補課）" list="courseNameList">
         <select id="newEvType" class="ev-type-select">
           <option value="class">上課</option>
           <option value="review">複習</option>
@@ -276,7 +276,7 @@
   </div>
 </div>
 
-<script src="data.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="data.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
