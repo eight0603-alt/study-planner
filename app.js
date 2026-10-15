@@ -5,7 +5,6 @@ const EXAM_DATE   = new Date('2027-08-20');
 const WEEKDAYS_CN = ['日','一','二','三','四','五','六'];
 const MONTHS_CN   = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const APPT_COLORS = {
-  '身心科':             '#B088CC',
   '瑜伽（9:30-11:30）': '#5EAA6E',
   '美甲（13:00-15:00）':'#C4678A',
 };
@@ -190,7 +189,6 @@ function renderCalendar() {
   legendEl.innerHTML=SCHEDULE_DATA.courses.map(c=>
     `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${c.name}</div>`
   ).join('')+`
-    <div class="legend-item"><div class="legend-swatch" style="background:#B088CC"></div>身心科</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#5EAA6E"></div>瑜伽</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#C4678A"></div>美甲</div>
     <div class="legend-item" style="color:var(--text-3);font-style:italic">拖曳移動行程・點擊編輯</div>`;
