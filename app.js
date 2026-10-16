@@ -193,7 +193,8 @@ function renderDashboard() {
 
 // ── Calendar ──────────────────────────────────────
 function renderCalendar() {
-  document.getElementById('calMonthLabel').textContent=`${calYear}年 ${MONTHS_CN[calMonth]}`;
+  const ci=document.getElementById('calMonthInput');
+  if(ci && document.activeElement!==ci){ ci.value=`${calYear}年 ${MONTHS_CN[calMonth]}`; ci.classList.remove('invalid'); }
   const legendEl=document.getElementById('calLegend');
   legendEl.innerHTML=SCHEDULE_DATA.courses.map(c=>
     `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${c.name}</div>`
@@ -376,6 +377,56 @@ function execMoveEvent(toDs) {
 
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
+function calToday(){const t=new Date();calYear=t.getFullYear();calMonth=t.getMonth();renderCalendar();calHighlight(todayStr());}
+
+// Type to jump on the month calendar: 2027/3, 3月, 202703, 3 (month) — or a full date 11/20, 1120, 2027/3/5, 明天 (also highlights that day)
+function parseMonthInput(raw){
+  const ref=`${calYear}/${String(calMonth+1).padStart(2,'0')}/15`;
+  let s=String(raw||'').trim().replace(/\s+/g,'')
+    .replace(/[０-９／－]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248));
+  let y=null,m=null,mm;
+  if((mm=/^(\d{4})[\/\-.年](\d{1,2})月?$/.exec(s))) [y,m]=[+mm[1],+mm[2]];
+  else if((mm=/^(\d{4})(\d{2})$/.exec(s))) [y,m]=[+mm[1],+mm[2]];
+  else if((mm=/^(\d{1,2})月?$/.exec(s))) m=+mm[1];
+  if(m!==null){
+    if(m<1||m>12) return null;
+    if(y===null){
+      const keys=Object.keys(SCHEDULE_DATA.schedule).sort();
+      const lo=keys[0].slice(0,7), hi=keys[keys.length-1].slice(0,7);
+      const cands=[calYear-1,calYear,calYear+1];
+      const key=yy=>`${yy}/${String(m).padStart(2,'0')}`;
+      const inPlan=cands.filter(yy=>key(yy)>=lo&&key(yy)<=hi);
+      const pool=inPlan.length?inPlan:cands;
+      y=pool.reduce((b,yy)=>Math.abs((yy*12+m)-(calYear*12+calMonth+1))<Math.abs((b*12+m)-(calYear*12+calMonth+1))?yy:b);
+    }
+    return {y, m, ds:null};
+  }
+  const ds=parseDateInput(raw, ref);
+  if(!ds) return null;
+  const [yy,m2]=ds.split('/').map(Number);
+  return {y:yy, m:m2, ds};
+}
+function calGoto(){
+  const ci=document.getElementById('calMonthInput');
+  const r=parseMonthInput(ci.value);
+  if(!r){ ci.classList.add('invalid'); return; }
+  ci.classList.remove('invalid');
+  calYear=r.y; calMonth=r.m-1; ci.blur(); renderCalendar();
+  if(r.ds) calHighlight(r.ds);
+}
+function calHighlight(ds){
+  const td=document.querySelector(`.cal-table td[data-ds="${ds}"]`);
+  if(!td) return;
+  td.classList.add('search-hit');
+  td.scrollIntoView({block:'nearest', behavior:'smooth'});
+  setTimeout(()=>td.classList.remove('search-hit'), 2500);
+}
+function calMonthKey(e){
+  const ci=e.target;
+  if(e.key==='Enter'){ e.preventDefault(); calGoto(); }
+  else if(e.key==='Escape'){ ci.classList.remove('invalid'); ci.value=`${calYear}年 ${MONTHS_CN[calMonth]}`; ci.blur(); }
+  else ci.classList.remove('invalid');
+}
 
 // ── Day Modal ─────────────────────────────────────
 function openDayModal(ds) {
@@ -741,7 +792,8 @@ function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDa
 function dailyToday(){dailyDate=todayStr();renderDaily();}
 
 // Type a date to jump: 11/20, 1120, 2026/11/20, 2026-11-20, 20261120, 11月20日, 今天/明天/昨天
-function parseDateInput(raw){
+function parseDateInput(raw, refDs){
+  refDs = refDs || dailyDate;
   let s=String(raw||'').trim().replace(/\s+/g,'');
   if(!s) return null;
   const rel={'今天':0,'今日':0,'明天':1,'明日':1,'後天':2,'昨天':-1,'昨日':-1,'前天':-2};
@@ -752,14 +804,14 @@ function parseDateInput(raw){
   else if((mm=/^(\d{1,2})\/(\d{1,2})$/.exec(s))) [m,d]=[+mm[1],+mm[2]];
   else if((mm=/^(\d{4})(\d{2})(\d{2})$/.exec(s))) [y,m,d]=[+mm[1],+mm[2],+mm[3]];
   else if((mm=/^(\d{1,2})(\d{2})$/.exec(s))) [m,d]=[+mm[1],+mm[2]];
-  else if((mm=/^(\d{1,2})$/.exec(s))) { const c=parseDate(dailyDate); [y,m,d]=[c.getFullYear(),c.getMonth()+1,+mm[1]]; }
+  else if((mm=/^(\d{1,2})$/.exec(s))) { const c=parseDate(refDs); [y,m,d]=[c.getFullYear(),c.getMonth()+1,+mm[1]]; }
   else return null;
   const valid=(yy)=>{const t=new Date(yy,m-1,d);return t.getMonth()===m-1&&t.getDate()===d?t:null;};
   if(y!==null){ const t=valid(y); return t?fmtDate(t):null; }
   // No year typed: prefer the year inside the study plan, else the one closest to the date shown
   const keys=Object.keys(SCHEDULE_DATA.schedule).sort();
   const lo=parseDate(keys[0]), hi=parseDate(keys[keys.length-1]);
-  const cur=parseDate(dailyDate), cy=cur.getFullYear();
+  const cur=parseDate(refDs), cy=cur.getFullYear();
   const cands=[cy-1,cy,cy+1].map(valid).filter(Boolean);
   const inPlan=cands.filter(t=>t>=lo&&t<=hi);
   const pool=inPlan.length?inPlan:cands;
