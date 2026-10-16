@@ -117,6 +117,48 @@ function renderCountdown() {
 }
 
 // ── Dashboard ─────────────────────────────────────
+// ── Calendar ✓ ⇄ daily ✓ sync ──
+function bulletMatchesEvent(b, ev) {
+  if (b.ref) return b.ref.course===ev.course && b.ref.type===ev.type && (b.ref.label||'')===(ev.label||'');
+  const hasLabel = ev.label && ev.label!=='—';
+  return b.text.startsWith(ev.course) && (!hasLabel || b.text.includes(ev.label));
+}
+function eventBulletText(ds, ev) {
+  const tm = eventTime(ds, ev);
+  return ev.course + (ev.label && ev.label!=='—' ? '　'+ev.label : '') + (tm ? ` (${tm.start}–${tm.end})` : '');
+}
+// Calendar → daily: mark the matching daily bullet done / back to todo (adds it if missing)
+function setBulletDoneForEvent(ds, ev, done) {
+  ensureScheduleBullets(ds);
+  const bullets = getBullets(ds);
+  const b = bullets.find(x => bulletMatchesEvent(x, ev));
+  if (b) b.status = done ? 'done' : (b.status==='done' ? 'todo' : b.status);
+  else if (done) bullets.push({text:eventBulletText(ds, ev), status:'done', ref:{course:ev.course, type:ev.type, label:ev.label}});
+  saveBullets(ds, bullets);
+}
+// Daily → calendar: mirror a bullet's done state onto the calendar's completed list
+function syncCalendarFromBullet(ds, b) {
+  const item = allEventsOn(ds).find(({ev}) => bulletMatchesEvent(b, ev));
+  if (!item) return;
+  const key = `${item.srcType}-${item.srcIdx}`;
+  const list = getCompleted(ds);
+  const has = list.includes(key);
+  if (b.status==='done' && !has) list.push(key);
+  if (b.status!=='done' && has) list.splice(list.indexOf(key), 1);
+  storage(`completed-${ds}`, list);
+}
+// One-time: carry over ✓ already made on the calendar before sync existed
+function migrateCalendarDoneToBullets() {
+  if (storage('sync-cal-daily-v1')) return;
+  for (let i=0;i<localStorage.length;i++) {
+    const m=/^completed-(\d{4}\/\d{2}\/\d{2})$/.exec(localStorage.key(i)||'');
+    if(!m) continue;
+    const ds=m[1], list=getCompleted(ds);
+    allEventsOn(ds).forEach(({ev,srcType,srcIdx})=>{ if(list.includes(`${srcType}-${srcIdx}`)) setBulletDoneForEvent(ds, ev, true); });
+  }
+  storage('sync-cal-daily-v1', true);
+}
+
 // ── Progress from the daily page: only bullets marked ✓ 完成 count ──
 // Which schedule event a daily bullet stands for (stored ref, or matched from its text for older bullets)
 function bulletEventRef(ds, b) {
@@ -527,6 +569,8 @@ function toggleModalDoneAll(ds, doneKey) {
   const pos=list.indexOf(doneKey);
   if(pos===-1) list.push(doneKey); else list.splice(pos,1);
   storage(`completed-${ds}`,list);
+  const item=allEventsOn(ds).find(({srcType,srcIdx})=>`${srcType}-${srcIdx}`===doneKey);
+  if(item) setBulletDoneForEvent(ds, item.ev, pos===-1);
   renderModalContent();
   const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
   if(cont) buildCalDayEvents(cont,ds);
@@ -960,13 +1004,17 @@ function cycleBulletStatus(idx){
   const bullets=getBullets(dailyDate);
   const cur=BULLET_STATUSES.indexOf(bullets[idx].status);
   bullets[idx].status=BULLET_STATUSES[(cur+1)%BULLET_STATUSES.length];
-  saveBullets(dailyDate,bullets); renderBullets();
+  saveBullets(dailyDate,bullets);
+  syncCalendarFromBullet(dailyDate, bullets[idx]);
+  renderBullets();
 }
 function updateBulletText(idx,text){
   const bullets=getBullets(dailyDate); bullets[idx].text=text; saveBullets(dailyDate,bullets);
 }
 function deleteBullet(idx){
-  const bullets=getBullets(dailyDate); bullets.splice(idx,1); saveBullets(dailyDate,bullets); renderBullets();
+  const bullets=getBullets(dailyDate); const [gone]=bullets.splice(idx,1); saveBullets(dailyDate,bullets);
+  if(gone && gone.status==='done') syncCalendarFromBullet(dailyDate, {...gone, status:'todo'});
+  renderBullets();
 }
 function ensureScheduleBullets(ds) {
   // Auto-add schedule events as bullet entries if not done yet for this day
@@ -985,7 +1033,7 @@ function ensureScheduleBullets(ds) {
         text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : '') + timeStr,
         status: 'todo',
       };
-      if (ev.type==='class' || ev.type==='review') entry.ref = {course:ev.course, type:ev.type, label:ev.label};
+      entry.ref = {course:ev.course, type:ev.type, label:ev.label};
       return entry;
     });
     saveBullets(ds, autoEntries);
@@ -1048,5 +1096,6 @@ function renderHabits(){
 }
 
 // ── Init ──────────────────────────────────────────
+try { migrateCalendarDoneToBullets(); } catch(e) { console.error('migrate:', e); }
 renderCountdown();
 renderDashboard();
