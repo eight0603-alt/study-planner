@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -102,8 +102,11 @@
       <h1>月曆</h1>
       <div class="cal-nav">
         <button class="icon-btn" onclick="calPrev()">&#8592;</button>
-        <span id="calMonthLabel"></span>
+        <input id="calMonthInput" class="date-search" type="text" autocomplete="off"
+               placeholder="輸入月份或日期" title="輸入後按 Enter，例：3月、2027/3、11/20、1120、明天"
+               onkeydown="calMonthKey(event)" onfocus="this.select()" onblur="if(!this.classList.contains('invalid'))this.value=`${calYear}年 ${MONTHS_CN[calMonth]}`">
         <button class="icon-btn" onclick="calNext()">&#8594;</button>
+        <button class="small-btn" style="font-size:11px;padding:3px 10px" onclick="calToday()">今天</button>
       </div>
     </header>
     <div class="cal-legend" id="calLegend"></div>
@@ -282,6 +285,6 @@
 </div>
 
 <script src="data.js?v=14"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
