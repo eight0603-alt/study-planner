@@ -48,17 +48,26 @@ function allEventsOn(ds) {
   getCustomEvents(ds).forEach((ev, i) => result.push({ev, srcType:'custom', srcIdx:i}));
 
   // Sort by start time if available; events without time go last
-  const tevs = getTimeEvents(ds);
-  const timeMap = {};
-  tevs.forEach(t => { timeMap[t.course] = t.start; });
-
   result.sort((a, b) => {
-    const ta = timeMap[a.ev.course] || 'ZZ:ZZ';
-    const tb = timeMap[b.ev.course] || 'ZZ:ZZ';
+    const ta = (eventTime(ds, a.ev)||{}).start || 'ZZ:ZZ';
+    const tb = (eventTime(ds, b.ev)||{}).start || 'ZZ:ZZ';
     return ta.localeCompare(tb);
   });
 
   return result;
+}
+// Time of an event: set via ⏱ / timeline, else parsed from a name like 瑜伽（9:30-11:30）
+function padTime(t){ const [h,m]=t.split(':'); return h.padStart(2,'0')+':'+m; }
+function eventTime(ds, ev) {
+  const t = getTimeEvents(ds).find(e => e.course === ev.course);
+  if (t) return {start:t.start, end:t.end};
+  const m = /(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})/.exec(ev.course||'');
+  return m ? {start:padTime(m[1]), end:padTime(m[2])} : null;
+}
+// Timed entries added on the timeline that don't match any event of that day
+function orphanTimeEvents(ds) {
+  const names = new Set(allEventsOn(ds).map(x => x.ev.course));
+  return getTimeEvents(ds).filter(t => !names.has(t.course));
 }
 // Legacy compat
 function eventsOn(ds) { return allEventsOn(ds).map(x=>x.ev); }
@@ -257,9 +266,12 @@ function buildCalDayEvents(container, ds) {
     const doneKey=`${srcType}-${srcIdx}`;
     const isDone=completed.includes(doneKey);
     chip.style.cssText=`background:${color}22;color:${color}${isDone?';opacity:0.45;text-decoration:line-through':''}`;
-    chip.textContent=(isDone?'✓ ':'')+ev.course;
+    const tm=eventTime(ds, ev);
+    chip.textContent='';
+    if(tm){ const ts=document.createElement('span'); ts.className='cal-ev-time'; ts.textContent=tm.start; chip.appendChild(ts); }
+    chip.appendChild(document.createTextNode((isDone?'✓ ':'')+ev.course.replace(/（\d{1,2}:\d{2}\s*[-–~]\s*\d{1,2}:\d{2}）/,'')));
     chip.draggable=true;
-    chip.title=`${ev.course}　拖曳=移動　點擊=編輯`;
+    chip.title=`${tm?tm.start+'–'+tm.end+' ':''}${ev.course}　拖曳=移動　點擊=編輯`;
     chip.dataset.pos=String(pos);
 
     chip.addEventListener('mousedown', e=>e.stopPropagation());
@@ -300,6 +312,16 @@ function buildCalDayEvents(container, ds) {
       if(!dragInfo) openDayModal(ds);
     });
 
+    container.appendChild(chip);
+  });
+  orphanTimeEvents(ds).forEach(t=>{
+    const color=t.type==='appt'?(APPT_COLORS[t.course]||'#D29922'):courseColor(t.course);
+    const chip=document.createElement('div');
+    chip.className=`cal-event${t.type==='review'?' review':t.type==='appt'?' appt':''}`;
+    chip.style.cssText=`background:${color}22;color:${color}`;
+    const ts=document.createElement('span'); ts.className='cal-ev-time'; ts.textContent=t.start; chip.appendChild(ts);
+    chip.appendChild(document.createTextNode(t.course));
+    chip.title=`${t.start}–${t.end} ${t.course}`;
     container.appendChild(chip);
   });
 }
@@ -384,8 +406,7 @@ function renderModalContent() {
     const isCustom=srcType==='custom';
     const isBuiltin=srcType==='builtin';
     // Time info if set
-    const tevs=getTimeEvents(ds);
-    const timeEv=tevs.find(e=>e.course===ev.course);
+    const timeEv=eventTime(ds, ev);
     const timeStr=timeEv?`${timeEv.start}–${timeEv.end}`:'';
 
     html+=`<div class="modal-event-row${done?' ev-done':''}">
@@ -702,7 +723,9 @@ function renderTimeline() {
 
 function renderDaily(){
   const d=parseDate(dailyDate);
-  document.getElementById('dailyDateLabel').textContent=`${dailyDate} 週${WEEKDAYS_CN[d.getDay()]}`;
+  const di=document.getElementById('dailyDateInput');
+  if(di && document.activeElement!==di){ di.value=dailyDate; di.classList.remove('invalid'); }
+  document.getElementById('dailyDateLabel').textContent=`週${WEEKDAYS_CN[d.getDay()]}`;
   try { renderTimeline(); } catch(e) { console.error('renderTimeline:', e); }
   try { renderBullets(); } catch(e) { console.error('renderBullets:', e); }
   try {
@@ -715,6 +738,48 @@ function renderDaily(){
 }
 function dailyPrev(){dailyDate=fmtDate(addDays(parseDate(dailyDate),-1));renderDaily();}
 function dailyNext(){dailyDate=fmtDate(addDays(parseDate(dailyDate),1));renderDaily();}
+function dailyToday(){dailyDate=todayStr();renderDaily();}
+
+// Type a date to jump: 11/20, 1120, 2026/11/20, 2026-11-20, 20261120, 11月20日, 今天/明天/昨天
+function parseDateInput(raw){
+  let s=String(raw||'').trim().replace(/\s+/g,'');
+  if(!s) return null;
+  const rel={'今天':0,'今日':0,'明天':1,'明日':1,'後天':2,'昨天':-1,'昨日':-1,'前天':-2};
+  if(s in rel) return fmtDate(addDays(new Date(), rel[s]));
+  s=s.replace(/[０-９／－]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)).replace(/[年月.\-]/g,'/').replace(/[日號号]$/,'');
+  let y=null,m,d,mm;
+  if((mm=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(s))) [y,m,d]=[+mm[1],+mm[2],+mm[3]];
+  else if((mm=/^(\d{1,2})\/(\d{1,2})$/.exec(s))) [m,d]=[+mm[1],+mm[2]];
+  else if((mm=/^(\d{4})(\d{2})(\d{2})$/.exec(s))) [y,m,d]=[+mm[1],+mm[2],+mm[3]];
+  else if((mm=/^(\d{1,2})(\d{2})$/.exec(s))) [m,d]=[+mm[1],+mm[2]];
+  else if((mm=/^(\d{1,2})$/.exec(s))) { const c=parseDate(dailyDate); [y,m,d]=[c.getFullYear(),c.getMonth()+1,+mm[1]]; }
+  else return null;
+  const valid=(yy)=>{const t=new Date(yy,m-1,d);return t.getMonth()===m-1&&t.getDate()===d?t:null;};
+  if(y!==null){ const t=valid(y); return t?fmtDate(t):null; }
+  // No year typed: prefer the year inside the study plan, else the one closest to the date shown
+  const keys=Object.keys(SCHEDULE_DATA.schedule).sort();
+  const lo=parseDate(keys[0]), hi=parseDate(keys[keys.length-1]);
+  const cur=parseDate(dailyDate), cy=cur.getFullYear();
+  const cands=[cy-1,cy,cy+1].map(valid).filter(Boolean);
+  const inPlan=cands.filter(t=>t>=lo&&t<=hi);
+  const pool=inPlan.length?inPlan:cands;
+  let best=null;
+  pool.forEach(t=>{ if(!best||Math.abs(t-cur)<Math.abs(best-cur)) best=t; });
+  return best?fmtDate(best):null;
+}
+function dailyGoto(){
+  const di=document.getElementById('dailyDateInput');
+  const ds=parseDateInput(di.value);
+  if(!ds){ di.classList.add('invalid'); return; }
+  di.classList.remove('invalid');
+  dailyDate=ds; renderDaily(); di.blur();
+}
+function dailyDateKey(e){
+  const di=e.target;
+  if(e.key==='Enter'){ e.preventDefault(); dailyGoto(); }
+  else if(e.key==='Escape'){ di.value=dailyDate; di.classList.remove('invalid'); di.blur(); }
+  else di.classList.remove('invalid');
+}
 
 function getScheduleTodos(ds) {
   // Return today's schedule events as todo-like objects
