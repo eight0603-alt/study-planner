@@ -117,30 +117,66 @@ function renderCountdown() {
 }
 
 // ── Dashboard ─────────────────────────────────────
+// ── Progress from the daily page: only bullets marked ✓ 完成 count ──
+// Which schedule event a daily bullet stands for (stored ref, or matched from its text for older bullets)
+function bulletEventRef(ds, b) {
+  if (b.ref) return b.ref;
+  for (const {ev} of allEventsOn(ds)) {
+    if (ev.type!=='class' && ev.type!=='review') continue;
+    const hasLabel = ev.label && ev.label!=='—';
+    if (b.text.startsWith(ev.course) && (!hasLabel || b.text.includes(ev.label)))
+      return {course:ev.course, type:ev.type, label:ev.label};
+  }
+  return null;
+}
+function sessionNumbers(label) {
+  const m=/第(\d+)(?:-(\d+))?堂/.exec(label||'');
+  if(!m) return [];
+  const a=+m[1], b=m[2]?+m[2]:a, out=[];
+  for(let i=a;i<=b;i++) out.push(i);
+  return out;
+}
+function computeProgress() {
+  const sessions={}, reviews=new Set();
+  SCHEDULE_DATA.courses.forEach(c=>sessions[c.name]=new Set());
+  for (let i=0;i<localStorage.length;i++) {
+    const key=localStorage.key(i);
+    const m=/^bullets-(\d{4}\/\d{2}\/\d{2})$/.exec(key||'');
+    if(!m) continue;
+    const ds=m[1];
+    (storage(key)||[]).forEach(b=>{
+      if(b.status!=='done') return;
+      const ref=bulletEventRef(ds,b);
+      if(!ref) return;
+      if(ref.type==='class' && sessions[ref.course]) sessionNumbers(ref.label).forEach(n=>sessions[ref.course].add(n));
+      if(ref.type==='review') reviews.add(ref.course+'|'+ref.label);
+    });
+  }
+  const done={}; let totalSessions=0;
+  SCHEDULE_DATA.courses.forEach(c=>{ done[c.name]=Math.min(c.total, sessions[c.name].size); totalSessions+=done[c.name]; });
+  return {done, totalSessions, reviewCount:reviews.size};
+}
+
 function renderDashboard() {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayS = fmtDate(today);
   document.getElementById('dashDate').textContent = `${todayS} 週${WEEKDAYS_CN[today.getDay()]}`;
   const daysLeft = Math.max(0, Math.ceil((EXAM_DATE-today)/86400000));
   document.getElementById('statDaysLeft').textContent = daysLeft;
-  let totalClass=0, totalReview=0;
-  Object.entries(SCHEDULE_DATA.schedule).forEach(([ds,evs])=>{
-    if(parseDate(ds)<=today) evs.forEach(ev=>{
-      if(ev.type==='class') totalClass++;
-      if(ev.type==='review') totalReview++;
-    });
-  });
-  document.getElementById('statTotalHours').textContent=(totalClass*2.5).toFixed(0)+'h';
-  document.getElementById('statReviewDone').textContent=totalReview;
-  const coursesDone=SCHEDULE_DATA.courses.filter(c=>c.sessions_done>=c.total).length;
-  document.getElementById('statCourseDone').textContent=`${coursesDone}/10`;
+  const prog=computeProgress();
+  const doneOf=c=>prog.done[c.name]||0;
+  const hrs=prog.totalSessions*2.5;
+  document.getElementById('statTotalHours').textContent=(Number.isInteger(hrs)?hrs:hrs.toFixed(1))+'h';
+  document.getElementById('statReviewDone').textContent=prog.reviewCount;
+  const coursesDone=SCHEDULE_DATA.courses.filter(c=>doneOf(c)>=c.total).length;
+  document.getElementById('statCourseDone').textContent=`${coursesDone}/${SCHEDULE_DATA.courses.length}`;
 
   document.getElementById('courseProgress').innerHTML=SCHEDULE_DATA.courses.map(c=>{
-    const pct=Math.min(100,Math.round(c.sessions_done/c.total*100));
+    const pct=Math.min(100,Math.round(doneOf(c)/c.total*100));
     return `<div class="course-row">
       <div class="course-row-top">
         <span class="course-name" style="color:${c.color}">${c.name}</span>
-        <span class="course-pct">${c.sessions_done}/${c.total} (${pct}%)</span>
+        <span class="course-pct">${doneOf(c)}/${c.total} (${pct}%)</span>
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${c.color}"></div></div>
     </div>`;
@@ -181,7 +217,7 @@ function renderDashboard() {
     Object.entries(SCHEDULE_DATA.schedule).forEach(([ds,evs])=>{
       if(evs.some(e=>e.type==='class'&&e.course===c.name)&&(!lastDate||ds>lastDate)) lastDate=ds;
     });
-    if(lastDate) milestones.push({name:c.name,date:lastDate,color:c.color,done:c.sessions_done>=c.total});
+    if(lastDate) milestones.push({name:c.name,date:lastDate,color:c.color,done:doneOf(c)>=c.total});
   });
   milestones.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('upcomingMilestones').innerHTML=milestones.slice(0,6).map(m=>`
@@ -945,10 +981,12 @@ function ensureScheduleBullets(ds) {
     tevs.forEach(t => { timeMap[t.course] = `${t.start}–${t.end}`; });
     const autoEntries = items.map(({ev}) => {
       const timeStr = timeMap[ev.course] ? ` (${timeMap[ev.course]})` : '';
-      return {
+      const entry = {
         text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : '') + timeStr,
         status: 'todo',
       };
+      if (ev.type==='class' || ev.type==='review') entry.ref = {course:ev.course, type:ev.type, label:ev.label};
+      return entry;
     });
     saveBullets(ds, autoEntries);
   }
