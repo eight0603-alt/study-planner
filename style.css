@@ -755,3 +755,5 @@ body { display: flex; }
 .date-search.invalid { border-color: var(--danger); animation: dateShake .25s; }
 @keyframes dateShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
 .cal-nav .date-weekday { min-width: 0; font-size: 13px; color: var(--text-2); }
+/* Calendar search hit */
+.cal-table td.search-hit { outline: 2px solid var(--warn); outline-offset: -2px; background: rgba(210,153,34,.12); transition: background .3s; }
