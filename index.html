@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -116,8 +116,12 @@
       <h1>每日計畫</h1>
       <div class="cal-nav">
         <button class="icon-btn" onclick="dailyPrev()">&#8592;</button>
-        <span id="dailyDateLabel"></span>
+        <input id="dailyDateInput" class="date-search" type="text" autocomplete="off"
+               placeholder="輸入日期 例 11/20" title="輸入日期後按 Enter，例：11/20、1120、2027/3/5、明天"
+               onkeydown="dailyDateKey(event)" onfocus="this.select()" onblur="if(!this.classList.contains('invalid'))this.value=dailyDate">
+        <span id="dailyDateLabel" class="date-weekday"></span>
         <button class="icon-btn" onclick="dailyNext()">&#8594;</button>
+        <button class="small-btn" style="font-size:11px;padding:3px 10px" onclick="dailyToday()">今天</button>
       </div>
     </header>
     <div class="daily-layout daily-layout--3col">
@@ -278,6 +282,6 @@
 </div>
 
 <script src="data.js?v=14"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
