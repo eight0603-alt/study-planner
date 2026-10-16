@@ -738,3 +738,20 @@ body { display: flex; }
   resize: vertical;
 }
 .daily-notes-textarea:focus { border-color: var(--accent); outline: none; }
+
+/* Event time on month calendar */
+.cal-ev-time { font-family: 'JetBrains Mono', monospace; font-size: 9px; opacity: 0.8; margin-right: 4px; }
+
+/* Daily date search */
+.date-search {
+  width: 120px; text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 14px;
+  background: transparent; color: var(--text);
+  border: 1px solid transparent; border-radius: 6px; padding: 4px 6px;
+  outline: none; cursor: text;
+}
+.date-search:hover { border-color: var(--border); }
+.date-search:focus { border-color: var(--accent); background: var(--bg3); }
+.date-search.invalid { border-color: var(--danger); animation: dateShake .25s; }
+@keyframes dateShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
+.cal-nav .date-weekday { min-width: 0; font-size: 13px; color: var(--text-2); }
