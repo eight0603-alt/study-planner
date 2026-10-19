@@ -256,7 +256,7 @@ function applyPlan(p) {
 function initPlan() {
   let cfg = storage('plan-config');
   if (!cfg) {
-    const legacy = Object.keys(localStorage).some(k => /^(bullets-|completed-|hidden-|moved-|custom-|tevents-|dnotes-|habit-|review-settings|sync-cal-daily-v1)/.test(k));
+    const legacy = projectLocalKeys().some(k => /^(bullets-|completed-|hidden-|moved-|custom-|tevents-|dnotes-|habit-|review-settings|sync-cal-daily-v1)/.test(k));
     if (legacy) {
       cfg = clone(TEMPLATE_CPA);
       const rv = storage('review-settings');         // carry over the short-lived review dialog settings
@@ -264,6 +264,7 @@ function initPlan() {
       storage('plan-config', cfg);
     }
   }
+  if (cfg && cfg.exam) nameProjectAfterExam(cfg.exam.name);
   applyPlan(cfg || blankPlan());
   return !!cfg;
 }
@@ -337,7 +338,7 @@ function renderSettings() {
   if (!planDraft) planDraft = clone(PLAN);
   const p = planDraft, root = document.getElementById('planSettings');
   const dateIn = (path, val, extra = '') => `<input class="todo-input field-input ps-date" type="date" value="${iso(val)}" data-path="${path}" onchange="planSet(this)" ${extra}>`;
-  root.innerHTML = `
+  root.innerHTML = projectCardHTML() + `
   <div class="ps-card" id="plan-sec-exam">
     <h2 class="panel-title">考試與讀書期間</h2>
     <div class="ps-grid">
@@ -512,6 +513,7 @@ function planSave() {
   const dup = names.find((n, i) => names.indexOf(n) !== i);
   if (dup) { alert(`科目名稱「${dup}」重複了，請改成不同的名稱`); return; }
   savePlan(p);
+  nameProjectAfterExam(p.exam.name);
   planDraft = clone(PLAN);
   planJustSaved = true;
   renderCountdown();

@@ -826,3 +826,8 @@ body { display: flex; }
 .bullet-link { flex: none; background: none; border: 1px solid var(--border); border-radius: 10px; color: var(--accent); font-size: 11px; padding: 1px 8px; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
 .bullet-link--from { color: var(--text-3); }
 .bullet-link:hover { border-color: var(--accent); }
+/* Project switcher */
+.proj-switch { padding: 12px 12px 4px; }
+.proj-select { width: 100%; background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; font-size: 13px; cursor: pointer; }
+.proj-select:focus { outline: none; border-color: var(--accent); }
+.ps-danger { color: var(--danger) !important; border-color: rgba(248,81,73,.4) !important; }

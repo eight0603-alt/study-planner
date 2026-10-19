@@ -19,10 +19,10 @@ let dragInfo   = null;  // { ev, fromDs, srcType, srcIdx }
 // ── Storage ───────────────────────────────────────
 function storage(key, val) {
   if (val === undefined) {
-    try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+    try { return JSON.parse(localStorage.getItem(projKey(key))); } catch { return null; }
   }
-  if (val === null) { localStorage.removeItem(key); return; }
-  localStorage.setItem(key, JSON.stringify(val));
+  if (val === null) { localStorage.removeItem(projKey(key)); return; }
+  localStorage.setItem(projKey(key), JSON.stringify(val));
 }
 function getCustomEvents(ds)        { return storage(`custom-${ds}`) || []; }
 function saveCustomEvents(ds, evs)  { storage(`custom-${ds}`, evs); }
@@ -150,8 +150,8 @@ function syncCalendarFromBullet(ds, b) {
 // One-time: carry over ✓ already made on the calendar before sync existed
 function migrateCalendarDoneToBullets() {
   if (storage('sync-cal-daily-v1')) return;
-  for (let i=0;i<localStorage.length;i++) {
-    const m=/^completed-(\d{4}\/\d{2}\/\d{2})$/.exec(localStorage.key(i)||'');
+  for (const lk of projectLocalKeys()) {
+    const m=/^completed-(\d{4}\/\d{2}\/\d{2})$/.exec(lk);
     if(!m) continue;
     const ds=m[1], list=getCompleted(ds);
     allEventsOn(ds).forEach(({ev,srcType,srcIdx})=>{ if(list.includes(`${srcType}-${srcIdx}`)) setBulletDoneForEvent(ds, ev, true); });
@@ -182,8 +182,7 @@ function sessionNumbers(label) {
 function computeProgress() {
   const sessions={}, reviews=new Set();
   SCHEDULE_DATA.courses.forEach(c=>sessions[c.name]=new Set());
-  for (let i=0;i<localStorage.length;i++) {
-    const key=localStorage.key(i);
+  for (const key of projectLocalKeys()) {
     const m=/^bullets-(\d{4}\/\d{2}\/\d{2})$/.exec(key||'');
     if(!m) continue;
     const ds=m[1];
@@ -1176,6 +1175,7 @@ function renderHabits(){
 
 // ── Init ──────────────────────────────────────────
 const planReady = initPlan();
+renderProjectSwitcher();
 try { migrateCalendarDoneToBullets(); } catch(e) { console.error('migrate:', e); }
 renderCountdown();
 renderDashboard();

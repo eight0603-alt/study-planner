@@ -6,7 +6,7 @@
 <title>Study Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -15,6 +15,9 @@
   <div class="sidebar-logo">
     <span class="logo-mark">SP</span>
     <span class="logo-text">Study<br>Planner</span>
+  </div>
+  <div class="proj-switch">
+    <select id="projSelect" class="proj-select" onchange="switchProject(this.value)" title="切換專案"></select>
   </div>
   <ul class="nav-links">
     <li><button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard')">
@@ -315,7 +318,8 @@
   </div>
 </div>
 
-<script src="plan.js?v=1"></script>
-<script src="app.js?v=18"></script>
+<script src="projects.js?v=1"></script>
+<script src="plan.js?v=2"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
