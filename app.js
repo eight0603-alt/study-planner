@@ -450,25 +450,8 @@ function execMoveEvent(toDs) {
   if(!dragInfo) return;
   const {ev, fromDs, srcType, srcIdx}=dragInfo;
   dragInfo=null;
-
-  // ── Remove from source (all types) ──
-  if(srcType==='custom'){
-    const evs=getCustomEvents(fromDs); evs.splice(srcIdx,1); saveCustomEvents(fromDs,evs);
-  } else if(srcType==='moved'){
-    const evs=getMovedEvents(fromDs); evs.splice(srcIdx,1); saveMovedEvents(fromDs,evs);
-  } else if(srcType==='builtin'){
-    // Hide this built-in on its original day
-    const hidden=storage(`hidden-${fromDs}`)||[];
-    if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
-    storage(`hidden-${fromDs}`,hidden);
-  }
-
-  // ── Add to destination ──
-  const moved=getMovedEvents(toDs);
-  moved.push({course:ev.course, type:ev.type, label:ev.label||'', progress:ev.progress||''});
-  saveMovedEvents(toDs,moved);
-
-  // Re-render both days
+  if(fromDs===toDs) return;
+  moveEventItem(fromDs, {ev, srcType, srcIdx}, toDs);
   [fromDs,toDs].forEach(ds=>{
     const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
     if(cont) buildCalDayEvents(cont,ds);
@@ -854,11 +837,24 @@ function renderTimeline() {
     </div>`;
   });
 
+  // Calendar events that have a time (study slots, 瑜伽（9:30-11:30）…) but no manual entry
+  const scheduledCourses = new Set(tevs.map(e=>e.course));
+  const rest = allEventsOn(dailyDate).filter(({ev})=>!scheduledCourses.has(ev.course));
+  rest.forEach(({ev})=>{
+    const t = eventTime(dailyDate, ev); if (!t) return;
+    const color = evColor(ev);
+    const top = minutesToPx(timeToMinutes(t.start));
+    const height = Math.max(24, minutesToPx(timeToMinutes(t.end)) - top);
+    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44">
+      <div class="tl-event-name">${ev.course}${ev.label && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+ev.label+'</span>' : ''}</div>
+      <div class="tl-event-time">${t.start}–${t.end}</div>
+    </div>`;
+  });
+
   html += '</div>';
 
-  // Unscheduled built-in events below
-  const scheduledCourses = new Set(tevs.map(e=>e.course));
-  const unscheduled = allEventsOn(dailyDate).filter(({ev})=>!scheduledCourses.has(ev.course));
+  // Events without any time below
+  const unscheduled = rest.filter(({ev})=>!eventTime(dailyDate, ev));
   if (unscheduled.length) {
     html += `<div class="tl-unscheduled">
       <div class="tl-unsched-label">未設定時間</div>`;
@@ -1064,15 +1060,32 @@ function setBulletStatus(idx, status){
   syncCalendarFromBullet(dailyDate, bullets[idx]);
   closeBulletMenu(); renderBullets();
 }
-// Move one calendar event from a day to another (same as dragging it on the month calendar)
-function moveEventItem(fromDs, item, toDs){
+// Strip an auto-added time suffix like " (14:00–16:30)" from bullet text
+const stripBulletTime = t => String(t||'').replace(/\s*\(\d{1,2}:\d{2}[–-]\d{1,2}:\d{2}\)\s*$/,'').trim();
+// Move one calendar event to another day (same as dragging it on the month calendar).
+// The daily list follows: the old day keeps a ◎ record, the new day gets the item.
+function moveEventItem(fromDs, item, toDs, bulletIdx){
+  ensureScheduleBullets(fromDs); ensureScheduleBullets(toDs);   // seed both days before anything moves
   const {ev, srcType, srcIdx}=item;
   if(srcType==='custom'){ const evs=getCustomEvents(fromDs); evs.splice(srcIdx,1); saveCustomEvents(fromDs,evs); }
   else if(srcType==='moved'){ const evs=getMovedEvents(fromDs); evs.splice(srcIdx,1); saveMovedEvents(fromDs,evs); }
   else if(srcType==='builtin'){ const hidden=storage(`hidden-${fromDs}`)||[]; if(!hidden.includes(srcIdx)) hidden.push(srcIdx); storage(`hidden-${fromDs}`,hidden); }
   const moved=getMovedEvents(toDs);
-  moved.push({course:ev.course, type:ev.type, label:ev.label||'', progress:ev.progress||''});
+  const nev={course:ev.course, type:ev.type, label:ev.label||'', progress:ev.progress||''};
+  moved.push(nev);
   saveMovedEvents(toDs,moved);
+  // bullets
+  const fb=getBullets(fromDs);
+  const i = bulletIdx!=null ? bulletIdx : fb.findIndex(b=>b.status!=='scheduled' && bulletMatchesEvent(b,ev));
+  const tb=getBullets(toDs);
+  const b = i>=0 ? fb[i] : null;
+  const status = b && ['note','key','done'].includes(b.status) ? b.status : 'todo';
+  const tm = eventTime(toDs, nev);
+  tb.push({text:(b ? stripBulletTime(b.text) : eventBulletText(toDs, nev)) + (tm && b ? ` (${tm.start}–${tm.end})` : ''),
+           status, from:fromDs, ref:{course:nev.course, type:nev.type, label:nev.label}});
+  saveBullets(toDs,tb);
+  if(status==='done') syncCalendarFromBullet(toDs, tb[tb.length-1]);
+  if(b){ b.status='scheduled'; b.movedTo=toDs; saveBullets(fromDs,fb); }
 }
 // ◎ 排程: really move the item to another day; this day keeps a ◎ record pointing there
 function scheduleBullet(idx, isoDate){
@@ -1080,25 +1093,22 @@ function scheduleBullet(idx, isoDate){
   if(!/^\d{4}\/\d{2}\/\d{2}$/.test(toDs)) return;
   const fromDs=dailyDate;
   if(toDs===fromDs){ closeBulletMenu(); return; }
+  ensureScheduleBullets(fromDs); ensureScheduleBullets(toDs);
   const bullets=getBullets(fromDs); const b=bullets[idx]; if(!b) return;
-  ensureScheduleBullets(toDs);                       // seed the target day before anything moves in
   const item=allEventsOn(fromDs).find(({ev})=>bulletMatchesEvent(b,ev));
-  let ref=b.ref;
-  if(item) moveEventItem(fromDs, item, toDs);         // the calendar follows
+  if(item) moveEventItem(fromDs, item, toDs, idx);     // the calendar follows
   else {
     // A bullet with no calendar entry (own note / to-do): put it on the target day's calendar too
-    const name=b.ref ? b.ref.course : b.text.replace(/\s*\(\d{1,2}:\d{2}[–-]\d{1,2}:\d{2}\)\s*$/,'').trim();
+    const name=b.ref ? b.ref.course : stripBulletTime(b.text);
     const ev=b.ref ? {course:b.ref.course, type:b.ref.type, label:b.ref.label||'', progress:'', custom:true}
                    : {course:name, type:'appt', label:'', progress:'', custom:true};
     const evs=getCustomEvents(toDs); evs.push(ev); saveCustomEvents(toDs,evs);
-    ref={course:ev.course, type:ev.type, label:ev.label};
+    const tb=getBullets(toDs);
+    tb.push({text:b.text, status:(b.status==='note'||b.status==='key')?b.status:'todo', from:fromDs, ref:{course:ev.course, type:ev.type, label:ev.label}});
+    saveBullets(toDs,tb);
+    b.status='scheduled'; b.movedTo=toDs;
+    saveBullets(fromDs,bullets);
   }
-  const tb=getBullets(toDs);
-  const copy={text:b.text, status:(b.status==='note'||b.status==='key')?b.status:'todo', from:fromDs};
-  if(ref) copy.ref=ref;
-  tb.push(copy); saveBullets(toDs,tb);
-  b.status='scheduled'; b.movedTo=toDs;
-  saveBullets(fromDs,bullets);
   closeBulletMenu(); renderBullets();
   [fromDs,toDs].forEach(d=>{ const cont=document.querySelector(`.ev-container[data-ds="${d}"]`); if(cont) buildCalDayEvents(cont,d); });
 }
@@ -1119,15 +1129,8 @@ function ensureScheduleBullets(ds) {
   const bullets = getBullets(ds);
   // Only add if bullets is empty (first visit)
   if(bullets.length === 0) {
-    const tevs = getTimeEvents(ds);
-    const timeMap = {};
-    tevs.forEach(t => { timeMap[t.course] = `${t.start}–${t.end}`; });
     const autoEntries = items.map(({ev}) => {
-      const timeStr = timeMap[ev.course] ? ` (${timeMap[ev.course]})` : '';
-      const entry = {
-        text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : '') + timeStr,
-        status: 'todo',
-      };
+      const entry = { text: eventBulletText(ds, ev), status: 'todo' };
       entry.ref = {course:ev.course, type:ev.type, label:ev.label};
       return entry;
     });
@@ -1136,8 +1139,31 @@ function ensureScheduleBullets(ds) {
   storage(`bullets-seeded-${ds}`, true);
 }
 
+// Keep a day's bullet list in step with its calendar: add items that appeared on the
+// calendar, drop untouched to-dos whose calendar item is gone, refresh auto times.
+function reconcileDayBullets(ds){
+  if(!storage(`bullets-seeded-${ds}`)) return;
+  const items=allEventsOn(ds), bullets=getBullets(ds), done=getCompleted(ds);
+  const used=new Set(); let changed=false;
+  const missing=[];
+  items.forEach(({ev,srcType,srcIdx})=>{
+    const i=bullets.findIndex((b,j)=>!used.has(j) && b.status!=='scheduled' && bulletMatchesEvent(b,ev));
+    if(i<0){ missing.push({ev, isDone:done.includes(`${srcType}-${srcIdx}`)}); return; }
+    used.add(i);
+    const b=bullets[i], base=eventBulletText(ds,ev);
+    if(b.ref && stripBulletTime(b.text)===stripBulletTime(base) && b.text!==base){ b.text=base; changed=true; }
+  });
+  const keep=bullets.filter((b,j)=>{
+    if(used.has(j) || !b.ref || b.status!=='todo') return true;
+    changed=true; return false;                      // calendar item deleted / moved away
+  });
+  missing.forEach(({ev,isDone})=>{ keep.push({text:eventBulletText(ds,ev), status:isDone?'done':'todo', ref:{course:ev.course, type:ev.type, label:ev.label}}); changed=true; });
+  if(changed) saveBullets(ds,keep);
+}
+
 function renderBullets(){
   ensureScheduleBullets(dailyDate);
+  reconcileDayBullets(dailyDate);
   const bullets=getBullets(dailyDate);
   const ul=document.getElementById('bulletList'); if(!ul)return;
   if(!bullets.length){

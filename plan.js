@@ -303,17 +303,7 @@ function remapDayState(ds, oldArr, newArr) {
   if (storage(`order-${ds}`)) storage(`order-${ds}`, null);
 }
 // Days already opened on the daily page: unstarted items follow the new plan, ticked ones stay
-function syncDayBullets(ds, newArr) {
-  if (!storage(`bullets-seeded-${ds}`)) return;
-  let bullets = getBullets(ds);
-  const has = (b, e) => bulletMatchesEvent(b, e);
-  bullets = bullets.filter(b => !(b.ref && b.status === 'todo' && !newArr.some(e => has(b, e))));
-  newArr.forEach(e => {
-    if (!bullets.some(b => has(b, e)))
-      bullets.push({ text: eventBulletText(ds, e), status: 'todo', ref: { course: e.course, type: e.type, label: e.label } });
-  });
-  saveBullets(ds, bullets);
-}
+function syncDayBullets(ds) { if (typeof reconcileDayBullets === 'function') reconcileDayBullets(ds); }
 function savePlan(newCfg) {
   const today = todayStr();
   const oldSched = SCHEDULE_DATA.schedule;
