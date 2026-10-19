@@ -1021,6 +1021,69 @@ function cycleBulletStatus(idx){
   syncCalendarFromBullet(dailyDate, bullets[idx]);
   renderBullets();
 }
+// ── Bullet status menu (click the symbol) ──
+const BULLET_LABELS = {note:'筆記',todo:'待辦',done:'完成',cancel:'取消',scheduled:'排程',key:'重點'};
+function closeBulletMenu(){ const m=document.getElementById('bulletMenu'); if(m) m.remove(); document.removeEventListener('mousedown', bulletMenuOutside, true); }
+function bulletMenuOutside(e){ const m=document.getElementById('bulletMenu'); if(m && !m.contains(e.target)) closeBulletMenu(); }
+function openBulletMenu(idx, btn){
+  closeBulletMenu();
+  const b=getBullets(dailyDate)[idx]; if(!b) return;
+  const m=document.createElement('div'); m.id='bulletMenu'; m.className='bullet-menu';
+  const next=fmtDate(addDays(parseDate(dailyDate),1));
+  m.innerHTML=['todo','done','note','key','cancel'].map(s=>
+    `<button class="bm-item${b.status===s?' on':''}" onclick="setBulletStatus(${idx},'${s}')"><span class="bm-sym">${BULLET_SYMBOLS[s]}</span>${BULLET_LABELS[s]}</button>`).join('')+
+    `<div class="bm-sched">
+       <div class="bm-sched-title"><span class="bm-sym">◎</span>排程到</div>
+       <div class="bm-sched-row">
+         <input id="bmDate" type="date" class="todo-input field-input" value="${next.replace(/\//g,'-')}">
+         <button class="small-btn" style="padding:4px 10px" onclick="scheduleBullet(${idx}, document.getElementById('bmDate').value)">移過去</button>
+       </div>
+       ${b.movedTo?`<div class="bm-note">目前排在 ${b.movedTo}</div>`:''}
+     </div>`;
+  document.body.appendChild(m);
+  const r=btn.getBoundingClientRect();
+  const top=r.bottom+window.scrollY+4, left=Math.min(r.left+window.scrollX, window.scrollX+document.documentElement.clientWidth-m.offsetWidth-8);
+  m.style.top=top+'px'; m.style.left=Math.max(8,left)+'px';
+  setTimeout(()=>document.addEventListener('mousedown', bulletMenuOutside, true),0);
+}
+function setBulletStatus(idx, status){
+  const bullets=getBullets(dailyDate); if(!bullets[idx]) return;
+  bullets[idx].status=status;
+  if(status!=='scheduled') delete bullets[idx].movedTo;
+  saveBullets(dailyDate,bullets);
+  syncCalendarFromBullet(dailyDate, bullets[idx]);
+  closeBulletMenu(); renderBullets();
+}
+// Move one calendar event from a day to another (same as dragging it on the month calendar)
+function moveEventItem(fromDs, item, toDs){
+  const {ev, srcType, srcIdx}=item;
+  if(srcType==='custom'){ const evs=getCustomEvents(fromDs); evs.splice(srcIdx,1); saveCustomEvents(fromDs,evs); }
+  else if(srcType==='moved'){ const evs=getMovedEvents(fromDs); evs.splice(srcIdx,1); saveMovedEvents(fromDs,evs); }
+  else if(srcType==='builtin'){ const hidden=storage(`hidden-${fromDs}`)||[]; if(!hidden.includes(srcIdx)) hidden.push(srcIdx); storage(`hidden-${fromDs}`,hidden); }
+  const moved=getMovedEvents(toDs);
+  moved.push({course:ev.course, type:ev.type, label:ev.label||'', progress:ev.progress||''});
+  saveMovedEvents(toDs,moved);
+}
+// ◎ 排程: really move the item to another day; this day keeps a ◎ record pointing there
+function scheduleBullet(idx, isoDate){
+  const toDs=(isoDate||'').replace(/-/g,'/');
+  if(!/^\d{4}\/\d{2}\/\d{2}$/.test(toDs)) return;
+  const fromDs=dailyDate;
+  if(toDs===fromDs){ closeBulletMenu(); return; }
+  const bullets=getBullets(fromDs); const b=bullets[idx]; if(!b) return;
+  ensureScheduleBullets(toDs);                       // seed the target day before anything moves in
+  const item=allEventsOn(fromDs).find(({ev})=>bulletMatchesEvent(b,ev));
+  if(item) moveEventItem(fromDs, item, toDs);         // the calendar follows
+  const tb=getBullets(toDs);
+  const copy={text:b.text, status:(b.status==='note'||b.status==='key')?b.status:'todo', from:fromDs};
+  if(b.ref) copy.ref=b.ref;
+  tb.push(copy); saveBullets(toDs,tb);
+  b.status='scheduled'; b.movedTo=toDs;
+  saveBullets(fromDs,bullets);
+  closeBulletMenu(); renderBullets();
+  const cont=document.querySelector(`.ev-container[data-ds="${fromDs}"]`); if(cont) buildCalDayEvents(cont,fromDs);
+}
+function gotoDaily(ds){ dailyDate=ds; renderDaily(); }
 function updateBulletText(idx,text){
   const bullets=getBullets(dailyDate); bullets[idx].text=text; saveBullets(dailyDate,bullets);
 }
@@ -1064,9 +1127,11 @@ function renderBullets(){
   }
   ul.innerHTML=bullets.map((b,i)=>`
     <li class="bullet-item ${BULLET_CLASSES[b.status]||''}">
-      <button class="bullet-status-btn" onclick="cycleBulletStatus(${i})" title="點擊切換狀態">${BULLET_SYMBOLS[b.status]||'•'}</button>
+      <button class="bullet-status-btn" onclick="openBulletMenu(${i},this)" title="點擊選擇狀態">${BULLET_SYMBOLS[b.status]||'•'}</button>
       <input class="bullet-text" type="text" value="${b.text.replace(/"/g,'&quot;')}"
         onchange="updateBulletText(${i},this.value)" onblur="updateBulletText(${i},this.value)">
+      ${b.status==='scheduled'&&b.movedTo?`<button class="bullet-link" onclick="gotoDaily('${b.movedTo}')" title="前往那一天">→ ${b.movedTo.slice(5)}</button>`:''}
+      ${b.from?`<button class="bullet-link bullet-link--from" onclick="gotoDaily('${b.from}')" title="從這天移過來">← ${b.from.slice(5)}</button>`:''}
       <button class="bullet-del-btn" onclick="deleteBullet(${i})">✕</button>
     </li>`).join('');
 }
