@@ -1083,15 +1083,24 @@ function scheduleBullet(idx, isoDate){
   const bullets=getBullets(fromDs); const b=bullets[idx]; if(!b) return;
   ensureScheduleBullets(toDs);                       // seed the target day before anything moves in
   const item=allEventsOn(fromDs).find(({ev})=>bulletMatchesEvent(b,ev));
+  let ref=b.ref;
   if(item) moveEventItem(fromDs, item, toDs);         // the calendar follows
+  else {
+    // A bullet with no calendar entry (own note / to-do): put it on the target day's calendar too
+    const name=b.ref ? b.ref.course : b.text.replace(/\s*\(\d{1,2}:\d{2}[–-]\d{1,2}:\d{2}\)\s*$/,'').trim();
+    const ev=b.ref ? {course:b.ref.course, type:b.ref.type, label:b.ref.label||'', progress:'', custom:true}
+                   : {course:name, type:'appt', label:'', progress:'', custom:true};
+    const evs=getCustomEvents(toDs); evs.push(ev); saveCustomEvents(toDs,evs);
+    ref={course:ev.course, type:ev.type, label:ev.label};
+  }
   const tb=getBullets(toDs);
   const copy={text:b.text, status:(b.status==='note'||b.status==='key')?b.status:'todo', from:fromDs};
-  if(b.ref) copy.ref=b.ref;
+  if(ref) copy.ref=ref;
   tb.push(copy); saveBullets(toDs,tb);
   b.status='scheduled'; b.movedTo=toDs;
   saveBullets(fromDs,bullets);
   closeBulletMenu(); renderBullets();
-  const cont=document.querySelector(`.ev-container[data-ds="${fromDs}"]`); if(cont) buildCalDayEvents(cont,fromDs);
+  [fromDs,toDs].forEach(d=>{ const cont=document.querySelector(`.ev-container[data-ds="${d}"]`); if(cont) buildCalDayEvents(cont,d); });
 }
 function gotoDaily(ds){ dailyDate=ds; renderDaily(); }
 function updateBulletText(idx,text){
