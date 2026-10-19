@@ -58,7 +58,14 @@ function eventTime(ds, ev) {
   const t = getTimeEvents(ds).find(e => e.course === ev.course);
   if (t) return {start:t.start, end:t.end};
   const m = /(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})/.exec(ev.course||'');
-  return m ? {start:padTime(m[1]), end:padTime(m[2])} : null;
+  if (m) return {start:padTime(m[1]), end:padTime(m[2])};
+  // Planned classes / reviews take the time of their study slot that day
+  if (ev.type==='class' || ev.type==='review') {
+    const study = (SCHEDULE_DATA.schedule[ds]||[]).filter(e => e.type==='class' || e.type==='review');
+    const n = study.indexOf(ev);
+    if (n >= 0 && typeof slotTime === 'function') return slotTime(ds, n);
+  }
+  return null;
 }
 // Timed entries added on the timeline that don't match any event of that day
 function orphanTimeEvents(ds) {
@@ -326,6 +333,7 @@ function renderCalendar() {
     evWrap.className='ev-container'; evWrap.dataset.ds=ds;
     td.appendChild(evWrap);
     buildCalDayEvents(evWrap, ds);
+    try { gcalMarkCell(td, ds); } catch(e) {}
 
     // Drop zone for cross-day drag
     td.addEventListener('dragenter', e=>{e.preventDefault();});
@@ -871,6 +879,7 @@ function renderDaily(){
   const di=document.getElementById('dailyDateInput');
   if(di && document.activeElement!==di){ di.value=dailyDate; di.classList.remove('invalid'); }
   document.getElementById('dailyDateLabel').textContent=`週${WEEKDAYS_CN[d.getDay()]}`;
+  try { gcalRenderDailyBanner(dailyDate); } catch(e) {}
   try { renderTimeline(); } catch(e) { console.error('renderTimeline:', e); }
   try { renderBullets(); } catch(e) { console.error('renderBullets:', e); }
   try {
@@ -1183,3 +1192,4 @@ renderCountdown();
 renderDashboard();
 if (!planReady && !localStorage.getItem('sp-sync-uid')) showWelcome();
 try { initSync(); } catch(e) { console.error('sync:', e); }
+try { if (planReady) gcalStartup(); } catch(e) { console.error('gcal:', e); }

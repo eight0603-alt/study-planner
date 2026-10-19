@@ -30,7 +30,7 @@ function activeProjectId() {
 function activeProject() { const id = activeProjectId(); return getProjects().find(p => p.id === id); }
 function projPrefix(id) { id = id || activeProjectId(); return id === 'default' ? '' : `p:${id}:`; }
 function projKey(k) { return projPrefix() + k; }
-const isGlobalKey = k => k === PROJ_LIST_KEY || k === PROJ_ACTIVE_KEY || k === 'sp-sync-meta' || k === 'sp-sync-uid';
+const isGlobalKey = k => k === PROJ_LIST_KEY || k === PROJ_ACTIVE_KEY || k.startsWith('sp-sync-') || k.startsWith('sp-gcal-');
 // All keys that belong to a project, without their prefix
 function projectLocalKeys(id) {
   const pre = projPrefix(id), out = [];

@@ -15,7 +15,7 @@ const FIREBASE_CONFIG = {        // public web-app identifiers (not secrets); ac
 
 const SYNC_META_KEY = 'sp-sync-meta';     // { fullKey: lastModifiedMs }   (this device only)
 const SYNC_UID_KEY  = 'sp-sync-uid';      // who this browser's data belongs to (this device only)
-const LOCAL_ONLY = new Set(['sp-active', SYNC_META_KEY, SYNC_UID_KEY]);
+const LOCAL_ONLY = new Set(['sp-active', SYNC_META_KEY, SYNC_UID_KEY, 'sp-gcal-cache', 'sp-gcal-token']);
 
 let syncUser = null, syncDb = null, syncUnsub = null;
 let syncInitialDone = false, syncApplying = false, syncFlushTimer = null, syncFirstLogin = false;

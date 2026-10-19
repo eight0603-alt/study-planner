@@ -18,6 +18,7 @@ const TEMPLATE_CPA = {
   exam: { name: '會計師', start: '2027/08/20', end: '2027/08/22', regStart: '', regEnd: '' },
   study: { start: '2026/11/03', end: '2027/08/19' },
   slots: [2, 2, 2, 2, 2, 3, 3],
+  slotTimes: { weekday: ['14:00-16:30', '19:30-22:00'], weekend: ['14:00-16:30', '17:00-19:30', '20:00-22:30'] },
   keepReview: true,
   hoursPerSession: 2.5,
   courses: [
@@ -43,6 +44,7 @@ function blankPlan() {
     exam: { name: '', start: '', end: '', regStart: '', regEnd: '' },
     study: { start: todayStr(), end: '' },
     slots: [2, 2, 2, 2, 2, 3, 3],
+    slotTimes: { weekday: ['14:00-16:30', '19:30-22:00'], weekend: ['14:00-16:30', '17:00-19:30', '20:00-22:30'] },
     keepReview: true,
     hoursPerSession: 2.5,
     courses: [],
@@ -61,6 +63,12 @@ function normalizePlan(p) {
   p.exam = Object.assign(blankPlan().exam, p.exam || {});
   p.study = Object.assign({ start: '', end: '' }, p.study || {});
   p.slots = Array.from({ length: 7 }, (_, i) => Math.max(0, Math.min(8, parseInt((p.slots || [])[i], 10) || 0)));
+  const st = p.slotTimes || {}, okT = s => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(String(s || '').replace(/\s/g, ''));
+  const defT = blankPlan().slotTimes;
+  p.slotTimes = {
+    weekday: Array.from({ length: 8 }, (_, i) => okT((st.weekday || [])[i]) ? String(st.weekday[i]).replace(/\s/g, '') : (defT.weekday[i] || '')),
+    weekend: Array.from({ length: 8 }, (_, i) => okT((st.weekend || [])[i]) ? String(st.weekend[i]).replace(/\s/g, '') : (defT.weekend[i] || '')),
+  };
   p.hoursPerSession = parseFloat(p.hoursPerSession) > 0 ? parseFloat(p.hoursPerSession) : 2.5;
   p.courses = (p.courses || []).map((c, i) => ({
     name: String(c.name || '').trim() || `科目${i + 1}`,
@@ -97,6 +105,14 @@ function apptColor(name) {
   if (/報名/.test(name)) return MARKER_COLORS.reg;
   if (/考試/.test(name)) return MARKER_COLORS.exam;
   return '#D29922';
+}
+// Time of the n-th study slot (0-based) on a day, from the plan's slot times
+function slotTime(ds, n) {
+  if (!PLAN || !PLAN.slotTimes) return null;
+  const list = wdOf(ds) < 5 ? PLAN.slotTimes.weekday : PLAN.slotTimes.weekend;
+  const m = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/.exec(list[n] || '');
+  const pad = t => t.padStart(5, '0');
+  return m ? { start: pad(m[1]), end: pad(m[2]) } : null;
 }
 function examDateObj() { return PLAN && isDs(PLAN.exam.start) ? parseDate(PLAN.exam.start) : null; }
 
@@ -358,9 +374,16 @@ function renderSettings() {
 
   <div class="ps-card" id="plan-sec-slots">
     <h2 class="panel-title">每天可讀書的時段數</h2>
-    <div class="ps-slots">${WD_LABELS.map((w, i) => `<label><span>${w}</span><input class="todo-input field-input ps-num" type="number" min="0" max="8" value="${p.slots[i]}" data-path="slots.${i}" oninput="planSet(this)"></label>`).join('')}</div>
+    <div class="ps-slots">${WD_LABELS.map((w, i) => `<label><span>${w}</span><input class="todo-input field-input ps-num" type="number" min="0" max="8" value="${p.slots[i]}" data-path="slots.${i}" onchange="planSet(this);renderSettings()"></label>`).join('')}</div>
     <label class="ps-check"><input type="checkbox" ${p.keepReview ? 'checked' : ''} data-path="keepReview" onchange="planSet(this)"> 有上課的日子至少保留 1 個時段複習</label>
     <p class="ps-hint">每個時段排一堂課或一次複習。上完課剩下的時段會自動排複習。</p>
+    <div class="ps-times">
+      ${[['weekday', '平日（一～五）', Math.max(...p.slots.slice(0, 5), 1)], ['weekend', '假日（六、日）', Math.max(...p.slots.slice(5), 1)]].map(([k, label, n]) => `
+        <div class="ps-row"><span class="ps-lbl ps-times-lbl">${label}</span>
+          ${Array.from({ length: n }, (_, i) => `<span class="ps-slot-t"><span class="ps-hint">時段${i + 1}</span><input class="todo-input field-input ps-time" type="text" placeholder="例 14:00-16:30" value="${esc((p.slotTimes && p.slotTimes[k] && p.slotTimes[k][i]) || '')}" data-path="slotTimes.${k}.${i}" oninput="planSet(this)"></span>`).join('')}
+        </div>`).join('')}
+      <p class="ps-hint">每天的第 1 個時段先排上課，接著排複習。這些時間會顯示在月曆上，也用來和 Google 行事曆比對衝突。</p>
+    </div>
   </div>
 
   <div class="ps-card" id="plan-sec-courses">
