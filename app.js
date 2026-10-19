@@ -1,13 +1,8 @@
 'use strict';
 
 // ── Constants ─────────────────────────────────────
-const EXAM_DATE   = new Date('2027-08-20');
 const WEEKDAYS_CN = ['日','一','二','三','四','五','六'];
 const MONTHS_CN   = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-const APPT_COLORS = {
-  '瑜伽（9:30-11:30）': '#5EAA6E',
-  '美甲（13:00-15:00）':'#C4678A',
-};
 const BULLET_STATUSES = ['note','todo','done','cancel','scheduled','key'];
 const BULLET_SYMBOLS  = {note:'•',todo:'○',done:'✓',cancel:'✕',scheduled:'◎',key:'★'};
 const BULLET_CLASSES  = {note:'',todo:'',done:'status-done',cancel:'status-cancel',scheduled:'status-scheduled',key:'status-key'};
@@ -83,12 +78,12 @@ function addDays(d,n) { const r=new Date(d); r.setDate(r.getDate()+n); return r;
 // ── Color helpers ─────────────────────────────────
 function courseColor(name) {
   const c = SCHEDULE_DATA.courses.find(x=>x.name===name);
-  return c ? c.color : (APPT_COLORS[name]||'#8B949E');
+  return c ? c.color : (apptColor(name));
 }
 const TYPE_DEFAULT_COLORS = {class:'#58A6FF', review:'#3FB950', appt:'#D29922'};
 function evColor(ev) {
   if (!ev) return '#8B949E';
-  if (ev.type==='appt') return APPT_COLORS[ev.course]||'#D29922';
+  if (ev.type==='appt') return apptColor(ev.course);
   const c = SCHEDULE_DATA.courses.find(x=>x.name===ev.course);
   if (c) return c.color;
   return TYPE_DEFAULT_COLORS[ev.type]||'#8B949E';
@@ -106,14 +101,18 @@ function switchView(view) {
   if (view==='calendar')  renderCalendar();
   if (view==='daily')     renderDaily();
   if (view==='habits')    renderHabits();
+  if (view==='settings')  renderSettings();
 }
 
 // ── Countdown ─────────────────────────────────────
 function renderCountdown() {
   const el = document.getElementById('examCountdown');
   const today = new Date(); today.setHours(0,0,0,0);
-  const days = Math.max(0, Math.ceil((EXAM_DATE-today)/86400000));
-  el.innerHTML = `<strong>${days}</strong>天後考試<br><span style="font-size:10px;color:var(--text-3)">2027/08/20~22</span>`;
+  const ex = examDateObj();
+  if (!ex) { el.innerHTML = `<span style="font-size:11px;color:var(--text-3)">尚未設定考試日期</span>`; return; }
+  const days = Math.max(0, Math.ceil((ex-today)/86400000));
+  const range = PLAN.exam.end && PLAN.exam.end!==PLAN.exam.start ? `${PLAN.exam.start}~${PLAN.exam.end.slice(5)}` : PLAN.exam.start;
+  el.innerHTML = `<strong>${days}</strong>天後${esc(PLAN.exam.name||'')}考試<br><span style="font-size:10px;color:var(--text-3)">${range}</span>`;
 }
 
 // ── Dashboard ─────────────────────────────────────
@@ -205,11 +204,22 @@ function renderDashboard() {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayS = fmtDate(today);
   document.getElementById('dashDate').textContent = `${todayS} 週${WEEKDAYS_CN[today.getDay()]}`;
-  const daysLeft = Math.max(0, Math.ceil((EXAM_DATE-today)/86400000));
-  document.getElementById('statDaysLeft').textContent = daysLeft;
+  const ex = examDateObj();
+  document.getElementById('statDaysLeft').textContent = ex ? Math.max(0, Math.ceil((ex-today)/86400000)) : '—';
+  const regCard = document.getElementById('statRegCard');
+  if (regCard) {
+    const rs = PLAN.exam.regStart, re = PLAN.exam.regEnd;
+    regCard.style.display = (rs||re) ? '' : 'none';
+    let v='—', lbl='報名';
+    if (rs && todayS < rs) { v = Math.ceil((parseDate(rs)-today)/86400000); lbl = '距報名開始'; }
+    else if (re && todayS <= re) { v = Math.ceil((parseDate(re)-today)/86400000); lbl = rs ? '報名中・距截止' : '距報名截止'; }
+    else if (re) { v = '已截止'; lbl = '報名'; }
+    document.getElementById('statReg').textContent = v;
+    document.getElementById('statRegLabel').textContent = lbl;
+  }
   const prog=computeProgress();
   const doneOf=c=>prog.done[c.name]||0;
-  const hrs=prog.totalSessions*2.5;
+  const hrs=prog.totalSessions*(PLAN.hoursPerSession||2.5);
   document.getElementById('statTotalHours').textContent=(Number.isInteger(hrs)?hrs:hrs.toFixed(1))+'h';
   document.getElementById('statReviewDone').textContent=prog.reviewCount;
   const coursesDone=SCHEDULE_DATA.courses.filter(c=>doneOf(c)>=c.total).length;
@@ -279,8 +289,9 @@ function renderCalendar() {
   legendEl.innerHTML=SCHEDULE_DATA.courses.map(c=>
     `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${c.name}</div>`
   ).join('')+`
-    <div class="legend-item"><div class="legend-swatch" style="background:#5EAA6E"></div>瑜伽</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#C4678A"></div>美甲</div>
+    ${PLAN.appts.map(a=>`<div class="legend-item"><div class="legend-swatch" style="background:${a.color}"></div>${esc(a.name)}</div>`).join('')}
+    ${(PLAN.exam.regStart||PLAN.exam.regEnd)?`<div class="legend-item"><div class="legend-swatch" style="background:${MARKER_COLORS.reg}"></div>報名</div>`:''}
+    ${PLAN.exam.start?`<div class="legend-item"><div class="legend-swatch" style="background:${MARKER_COLORS.exam}"></div>考試</div>`:''}
     <div class="legend-item" style="color:var(--text-3);font-style:italic">拖曳移動行程・點擊編輯</div>`;
 
   const firstDay=new Date(calYear,calMonth,1);
@@ -396,7 +407,7 @@ function buildCalDayEvents(container, ds) {
     container.appendChild(chip);
   });
   orphanTimeEvents(ds).forEach(t=>{
-    const color=t.type==='appt'?(APPT_COLORS[t.course]||'#D29922'):courseColor(t.course);
+    const color=t.type==='appt'?apptColor(t.course):courseColor(t.course);
     const chip=document.createElement('div');
     chip.className=`cal-event${t.type==='review'?' review':t.type==='appt'?' appt':''}`;
     chip.style.cssText=`background:${color}22;color:${color}`;
@@ -472,7 +483,7 @@ function parseMonthInput(raw){
     if(m<1||m>12) return null;
     if(y===null){
       const keys=Object.keys(SCHEDULE_DATA.schedule).sort();
-      const lo=keys[0].slice(0,7), hi=keys[keys.length-1].slice(0,7);
+      const lo=keys.length?keys[0].slice(0,7):'0000/00', hi=keys.length?keys[keys.length-1].slice(0,7):'0000/00';
       const cands=[calYear-1,calYear,calYear+1];
       const key=yy=>`${yy}/${String(m).padStart(2,'0')}`;
       const inPlan=cands.filter(yy=>key(yy)>=lo&&key(yy)<=hi);
@@ -823,7 +834,7 @@ function renderTimeline() {
   // User-added time events
   const tevs = getTimeEvents(dailyDate);
   tevs.forEach((ev, i) => {
-    const color  = ev.type==='appt'?(APPT_COLORS[ev.course]||'#D29922'):courseColor(ev.course);
+    const color  = ev.type==='appt'?(apptColor(ev.course)):courseColor(ev.course);
     const top    = minutesToPx(timeToMinutes(ev.start));
     const height = Math.max(24, minutesToPx(timeToMinutes(ev.end)) - top);
     html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44"
@@ -892,7 +903,7 @@ function parseDateInput(raw, refDs){
   if(y!==null){ const t=valid(y); return t?fmtDate(t):null; }
   // No year typed: prefer the year inside the study plan, else the one closest to the date shown
   const keys=Object.keys(SCHEDULE_DATA.schedule).sort();
-  const lo=parseDate(keys[0]), hi=parseDate(keys[keys.length-1]);
+  const lo=keys.length?parseDate(keys[0]):new Date(0), hi=keys.length?parseDate(keys[keys.length-1]):new Date(0);
   const cur=parseDate(refDs), cy=cur.getFullYear();
   const cands=[cy-1,cy,cy+1].map(valid).filter(Boolean);
   const inPlan=cands.filter(t=>t>=lo&&t<=hi);
@@ -1098,174 +1109,9 @@ function renderHabits(){
 }
 
 
-// ── Review settings: which courses get reviews, and until when ──────────
-const REVIEW_SLOTS = {0:2,1:2,2:2,3:2,4:2,5:3,6:3};          // per weekday (Mon=0): class + review slots
-const REVIEW_DEFAULT_OFF = ['稅法','國文','稅法(二)'];       // reviewed through 稅法(二) / not reviewed
-const REVIEW_ORIGINAL = JSON.parse(JSON.stringify(SCHEDULE_DATA.schedule)); // as shipped in data.js
-const planKeys = () => Object.keys(REVIEW_ORIGINAL).sort();
-const PLAN_START = planKeys()[0], PLAN_END = planKeys()[planKeys().length-1];
-
-function reviewDefaults() {
-  const s = {};
-  SCHEDULE_DATA.courses.forEach(c => s[c.name] = {on: !REVIEW_DEFAULT_OFF.includes(c.name), end: PLAN_END});
-  return s;
-}
-function getReviewSettings() {
-  const saved = storage('review-settings') || {}, def = reviewDefaults();
-  Object.keys(def).forEach(k => { if (saved[k]) def[k] = {on: !!saved[k].on, end: saved[k].end || PLAN_END}; });
-  return def;
-}
-function wdMon(ds) { return (parseDate(ds).getDay()+6)%7; }
-
-// Build every day's review list from the settings. Days in `frozen` keep exactly what they had.
-function generateReviews(settings, frozen) {
-  frozen = frozen || {};
-  const order = SCHEDULE_DATA.courses.map(c => c.name);
-  const classesOn = {}, first = {};
-  planKeys().forEach(ds => {
-    const cs = (REVIEW_ORIGINAL[ds]||[]).filter(e => e.type==='class').map(e => e.course);
-    classesOn[ds] = cs;
-    cs.forEach(c => { if (!(c in first)) first[c] = ds; });
-  });
-  const active = (c, ds) => settings[c] && settings[c].on && ds <= settings[c].end;
-  const cnt = {}, lr = {}, out = {};
-  order.forEach(c => cnt[c] = 0);
-  const dayMs = 86400000;
-  const gap = (a, b) => Math.round((parseDate(b) - parseDate(a)) / dayMs);
-  for (let d = parseDate(PLAN_START); fmtDate(d) <= PLAN_END; d = addDays(d, 1)) {
-    const ds = fmtDate(d);
-    const picks = [];
-    if (frozen[ds]) {
-      frozen[ds].forEach(c => picks.push(c));
-    } else {
-      const slots = Math.max(0, (REVIEW_SLOTS[wdMon(ds)]||0) - (classesOn[ds]||[]).length);
-      if (!slots) continue;
-      const prev = (classesOn[fmtDate(addDays(d,-1))]||[]).filter(c => active(c, ds));
-      prev.sort((a, b) => ((lr[a]||PLAN_START) < (lr[b]||PLAN_START) ? -1 : (lr[a]||PLAN_START) > (lr[b]||PLAN_START) ? 1 : cnt[a]-cnt[b]));
-      prev.slice(0, slots).forEach(c => picks.push(c));
-      while (picks.length < slots) {
-        const el = order.filter(c => active(c, ds) && first[c] && first[c] < ds && !picks.includes(c) && !(classesOn[ds]||[]).includes(c));
-        if (!el.length) break;
-        const key = c => [(!(c in lr) || gap(lr[c], ds) >= 5) ? 0 : 1, cnt[c], first[c]];
-        el.sort((a, b) => { const A = key(a), B = key(b); for (let k = 0; k < 3; k++) { if (A[k] < B[k]) return -1; if (A[k] > B[k]) return 1; } return 0; });
-        picks.push(el[0]);
-      }
-    }
-    if (!picks.length) continue;
-    out[ds] = picks.map(c => { cnt[c] = (cnt[c]||0) + 1; lr[c] = ds; return {course:c, label:`第${cnt[c]}次複習`, progress:'—', type:'review', note:''}; });
-  }
-  return out;
-}
-// Put generated reviews into the schedule: classes, then reviews, then everything else (same layout as data.js)
-function buildScheduleWithReviews(reviews) {
-  const sched = {};
-  planKeys().forEach(ds => {
-    const base = REVIEW_ORIGINAL[ds] || [];
-    const day = [...base.filter(e => e.type==='class'), ...(reviews[ds]||[]), ...base.filter(e => e.type!=='class' && e.type!=='review')];
-    if (day.length) sched[ds] = day;
-  });
-  Object.keys(reviews).forEach(ds => { if (!sched[ds]) sched[ds] = reviews[ds]; });
-  return sched;
-}
-function applyReviewSettings() {
-  if (!storage('review-settings')) return;            // never edited: keep data.js exactly as shipped
-  SCHEDULE_DATA.schedule = buildScheduleWithReviews(generateReviews(getReviewSettings(), storage('review-frozen') || {}));
-}
-
-// When a day's list changes, keep ✓ / hidden marks attached to the same events
-function eventIdentity(ev) { return ev.type==='review' ? `review|${ev.course}` : `${ev.type}|${ev.course}|${ev.label}`; }
-function remapDayState(ds, oldArr, newArr) {
-  const used = new Set(), map = {};
-  oldArr.forEach((ev, i) => {
-    const j = newArr.findIndex((e, k) => !used.has(k) && eventIdentity(e)===eventIdentity(ev));
-    if (j >= 0) { used.add(j); map[i] = j; }
-  });
-  const hidden = storage(`hidden-${ds}`);
-  if (hidden) storage(`hidden-${ds}`, hidden.filter(i => i in map).map(i => map[i]));
-  const done = storage(`completed-${ds}`);
-  if (done) storage(`completed-${ds}`, done.map(k => {
-    const m = /^builtin-(\d+)$/.exec(k); if (!m) return k;
-    return (+m[1] in map) ? `builtin-${map[+m[1]]}` : null;
-  }).filter(Boolean));
-  if (storage(`order-${ds}`)) storage(`order-${ds}`, null);
-}
-// Days already opened on the daily page: add new reviews as ○, drop unstarted ones that no longer apply
-function syncReviewBullets(ds, newArr) {
-  if (!storage(`bullets-seeded-${ds}`)) return;
-  const want = newArr.filter(e => e.type==='review');
-  let bullets = getBullets(ds);
-  bullets = bullets.filter(b => !(b.ref && b.ref.type==='review' && b.status==='todo' && !want.some(e => e.course===b.ref.course)));
-  want.forEach(e => {
-    if (!bullets.some(b => b.ref ? (b.ref.type==='review' && b.ref.course===e.course) : (b.text.startsWith(e.course) && b.text.includes('複習'))))
-      bullets.push({text: eventBulletText(ds, e), status:'todo', ref:{course:e.course, type:'review', label:e.label}});
-  });
-  saveBullets(ds, bullets);
-}
-function saveReviewSettings(settings) {
-  const today = todayStr();
-  const frozen = storage('review-frozen') || {};
-  const oldSched = SCHEDULE_DATA.schedule;
-  Object.keys(oldSched).forEach(ds => {                        // past days stay as they were
-    if (ds < today && !(ds in frozen)) frozen[ds] = oldSched[ds].filter(e => e.type==='review').map(e => e.course);
-  });
-  storage('review-frozen', frozen);
-  storage('review-settings', settings);
-  const newSched = buildScheduleWithReviews(generateReviews(settings, frozen));
-  new Set([...Object.keys(oldSched), ...Object.keys(newSched)]).forEach(ds => {
-    const a = oldSched[ds] || [], b = newSched[ds] || [];
-    if (a.map(eventIdentity).join('§') === b.map(eventIdentity).join('§') && a.map(e=>e.label).join('§') === b.map(e=>e.label).join('§')) return;
-    remapDayState(ds, a, b);
-    if (ds >= today) syncReviewBullets(ds, b);
-  });
-  SCHEDULE_DATA.schedule = newSched;
-}
-
-// ── Review settings dialog ──
-let reviewDraft = null;
-function openReviewSettings() {
-  reviewDraft = getReviewSettings();
-  renderReviewSettings();
-  document.getElementById('reviewModal').classList.add('open');
-}
-function closeReviewSettings(e) {
-  if (!e || e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close'))
-    document.getElementById('reviewModal').classList.remove('open');
-}
-const toIso = ds => ds.replace(/\//g, '-');
-const fromIso = s => s.replace(/-/g, '/');
-function renderReviewSettings() {
-  const preview = generateReviews(reviewDraft, storage('review-frozen') || {});
-  const counts = {};
-  Object.values(preview).forEach(list => list.forEach(e => counts[e.course] = (counts[e.course]||0) + 1));
-  document.getElementById('reviewRows').innerHTML = SCHEDULE_DATA.courses.map((c, i) => {
-    const s = reviewDraft[c.name];
-    return `<div class="rv-row${s.on ? '' : ' rv-off'}">
-      <label class="rv-name"><input type="checkbox" ${s.on ? 'checked' : ''} onchange="reviewDraft['${c.name}'].on=this.checked;renderReviewSettings()">
-        <span class="rv-dot" style="background:${c.color}"></span>${c.name}</label>
-      <input class="todo-input field-input rv-date" type="date" value="${toIso(s.end)}" min="${toIso(PLAN_START)}" max="${toIso(PLAN_END)}"
-        ${s.on ? '' : 'disabled'} onchange="if(this.value){reviewDraft['${c.name}'].end=fromIso(this.value);renderReviewSettings()}">
-      <span class="rv-count">${s.on ? (counts[c.name]||0) + ' 次' : '—'}</span>
-    </div>`;
-  }).join('');
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  document.getElementById('reviewTotal').textContent = `共 ${total} 次複習`;
-}
-function applyReviewEndToAll() {
-  const v = document.getElementById('reviewAllEnd').value;
-  if (!v) return;
-  Object.values(reviewDraft).forEach(s => { if (s.on) s.end = fromIso(v); });
-  renderReviewSettings();
-}
-function resetReviewSettings() { reviewDraft = reviewDefaults(); renderReviewSettings(); }
-function submitReviewSettings() {
-  saveReviewSettings(reviewDraft);
-  document.getElementById('reviewModal').classList.remove('open');
-  const active = document.querySelector('.view.active');
-  if (active) switchView(active.id.replace('view-', ''));
-}
-
 // ── Init ──────────────────────────────────────────
-try { applyReviewSettings(); } catch(e) { console.error('reviews:', e); }
+const planReady = initPlan();
 try { migrateCalendarDoneToBullets(); } catch(e) { console.error('migrate:', e); }
 renderCountdown();
 renderDashboard();
+if (!planReady) showWelcome();

@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Study Planner — Sophie</title>
+<title>Study Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -33,6 +33,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       習慣
     </button></li>
+    <li><button class="nav-btn" data-view="settings" onclick="openPlanSettings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      設定
+    </button></li>
   </ul>
   <div class="sidebar-footer">
     <div class="exam-countdown" id="examCountdown"></div>
@@ -48,7 +52,7 @@
       <h1>儀表板</h1>
       <div style="display:flex;align-items:center;gap:12px">
         <span class="view-date" id="dashDate"></span>
-        <button class="small-btn rv-open-btn" onclick="openReviewSettings()">複習設定</button>
+        <button class="small-btn rv-open-btn" onclick="openPlanSettings('courses')">課表設定</button>
       </div>
     </header>
 
@@ -70,6 +74,10 @@
         <div class="stat-card">
           <span class="stat-value" id="statReviewDone">—</span>
           <span class="stat-label">複習場次</span>
+        </div>
+        <div class="stat-card" id="statRegCard" style="display:none">
+          <span class="stat-value" id="statReg">—</span>
+          <span class="stat-label" id="statRegLabel">報名</span>
         </div>
       </div>
 
@@ -110,7 +118,7 @@
                onkeydown="calMonthKey(event)" onfocus="this.select()" onblur="if(!this.classList.contains('invalid'))this.value=`${calYear}年 ${MONTHS_CN[calMonth]}`">
         <button class="icon-btn" onclick="calNext()">&#8594;</button>
         <button class="small-btn" style="font-size:11px;padding:3px 10px" onclick="calToday()">今天</button>
-        <button class="small-btn rv-open-btn" onclick="openReviewSettings()">複習設定</button>
+        <button class="small-btn rv-open-btn" onclick="openPlanSettings('courses')">課表設定</button>
       </div>
     </header>
     <div class="cal-legend" id="calLegend"></div>
@@ -203,6 +211,14 @@
     <div id="habitTracker"></div>
   </section>
 
+  <!-- ── Settings ── -->
+  <section id="view-settings" class="view">
+    <header class="view-header">
+      <h1>計畫設定</h1>
+    </header>
+    <div id="planSettings" class="plan-settings"></div>
+  </section>
+
 </main>
 
 <!-- Day Detail Modal -->
@@ -288,28 +304,18 @@
   </div>
 </div>
 
-<div id="reviewModal" class="modal-overlay" onclick="closeReviewSettings(event)">
-  <div class="modal" style="max-width:520px">
-    <button class="modal-close" onclick="closeReviewSettings()">✕</button>
-    <h2 class="modal-title">複習設定</h2>
-    <p class="rv-hint">勾選要排複習的科目，並設定每科複習到哪一天。今天以前的複習不會變動。</p>
-    <div class="rv-head"><span>科目</span><span>複習到</span><span>預計</span></div>
-    <div id="reviewRows"></div>
-    <div class="rv-all">
-      <span>全部改為</span>
-      <input id="reviewAllEnd" class="todo-input field-input rv-date" type="date" min="2026-11-03" max="2027-08-19">
-      <button class="cancel-btn" onclick="applyReviewEndToAll()">套用</button>
-    </div>
-    <div class="rv-foot">
-      <span id="reviewTotal" class="rv-total"></span>
-      <button class="cancel-btn" onclick="resetReviewSettings()">恢復預設</button>
-      <button class="cancel-btn" onclick="closeReviewSettings()">取消</button>
-      <button class="small-btn" style="padding:6px 18px" onclick="submitReviewSettings()">儲存</button>
+<div id="welcomeModal" class="modal-overlay">
+  <div class="modal" style="max-width:440px">
+    <h2 class="modal-title">歡迎使用 Study Planner</h2>
+    <p class="rv-hint" style="margin:0 0 18px">先設定考試日期和要讀的科目，系統會自動排好每天的上課與複習。之後隨時可以在左側「設定」修改。</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="cancel-btn" onclick="welcomeTemplate()">套用會計師範本</button>
+      <button class="small-btn" style="padding:6px 18px" onclick="welcomeStart()">開始設定</button>
     </div>
   </div>
 </div>
 
-<script src="data.js?v=14"></script>
-<script src="app.js?v=16"></script>
+<script src="plan.js?v=1"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
