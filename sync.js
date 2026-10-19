@@ -4,7 +4,14 @@
 //  Firestore at users/{uid}/kv/{key}. Each key carries a timestamp; the
 //  newest copy wins. Changes from other devices arrive live.
 // ═══════════════════════════════════════════════════════════════════════
-const FIREBASE_CONFIG = null;   // ← filled in once the Firebase project exists
+const FIREBASE_CONFIG = {        // public web-app identifiers (not secrets); access is enforced by Firestore rules
+  apiKey: 'AIzaSyBz2D0jE6wWcSLhsJmkNf3TZKoHkaLHRDw',
+  authDomain: 'study-planner-cdc04.firebaseapp.com',
+  projectId: 'study-planner-cdc04',
+  storageBucket: 'study-planner-cdc04.firebasestorage.app',
+  messagingSenderId: '298555378416',
+  appId: '1:298555378416:web:ff694c6337275907479035',
+};
 
 const SYNC_META_KEY = 'sp-sync-meta';     // { fullKey: lastModifiedMs }   (this device only)
 const SYNC_UID_KEY  = 'sp-sync-uid';      // who this browser's data belongs to (this device only)
