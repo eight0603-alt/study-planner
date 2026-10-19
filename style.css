@@ -757,3 +757,24 @@ body { display: flex; }
 .cal-nav .date-weekday { min-width: 0; font-size: 13px; color: var(--text-2); }
 /* Calendar search hit */
 .cal-table td.search-hit { outline: 2px solid var(--warn); outline-offset: -2px; background: rgba(210,153,34,.12); transition: background .3s; }
+/* Review settings */
+.rv-open-btn { font-size: 11px; padding: 3px 10px; background: transparent; color: var(--accent-2); border: 1px solid var(--accent-2); }
+.rv-hint { font-size: 12px; color: var(--text-2); margin: -6px 0 14px; line-height: 1.6; }
+.rv-head, .rv-row { display: grid; grid-template-columns: 1fr 150px 56px; gap: 10px; align-items: center; }
+.rv-head { font-size: 11px; color: var(--text-3); padding: 0 2px 6px; border-bottom: 1px solid var(--border); }
+.rv-row { padding: 7px 2px; border-bottom: 1px solid var(--bg3); }
+.rv-row.rv-off .rv-name { color: var(--text-3); }
+.rv-name { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.rv-name input { accent-color: var(--accent-2); }
+.rv-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.rv-date { padding: 4px 8px !important; font-size: 12px; font-family: 'JetBrains Mono', monospace; color-scheme: dark; }
+.rv-date:disabled { opacity: .35; }
+.rv-count { font-size: 12px; color: var(--text-2); text-align: right; font-family: 'JetBrains Mono', monospace; }
+.rv-all { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; color: var(--text-2); }
+.rv-all .rv-date { width: 150px; }
+.rv-foot { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+.rv-total { margin-right: auto; font-size: 12px; color: var(--text-2); }
+/* Text buttons: let them size to their label (plain .small-btn is a 34px icon square) */
+.small-btn[style*="padding"], .rv-open-btn, .modal .small-btn { width: auto; height: auto; min-height: 28px; padding: 4px 12px; white-space: nowrap; flex: none; font-size: 12px; }
+.rv-foot button, .rv-all button { white-space: nowrap; flex: none; }
+.bullet-legend span { white-space: nowrap; }
