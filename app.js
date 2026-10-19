@@ -21,8 +21,9 @@ function storage(key, val) {
   if (val === undefined) {
     try { return JSON.parse(localStorage.getItem(projKey(key))); } catch { return null; }
   }
-  if (val === null) { localStorage.removeItem(projKey(key)); return; }
+  if (val === null) { localStorage.removeItem(projKey(key)); syncMark(projKey(key)); return; }
   localStorage.setItem(projKey(key), JSON.stringify(val));
+  syncMark(projKey(key));
 }
 function getCustomEvents(ds)        { return storage(`custom-${ds}`) || []; }
 function saveCustomEvents(ds, evs)  { storage(`custom-${ds}`, evs); }
@@ -1179,4 +1180,5 @@ renderProjectSwitcher();
 try { migrateCalendarDoneToBullets(); } catch(e) { console.error('migrate:', e); }
 renderCountdown();
 renderDashboard();
-if (!planReady) showWelcome();
+if (!planReady && !localStorage.getItem('sp-sync-uid')) showWelcome();
+try { initSync(); } catch(e) { console.error('sync:', e); }

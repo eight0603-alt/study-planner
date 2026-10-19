@@ -522,7 +522,10 @@ function planSave() {
 }
 
 // ── First-time welcome ───────────────────────────────────────────────────
-function showWelcome() { document.getElementById('welcomeModal').classList.add('open'); }
+function showWelcome() {
+  document.getElementById('welcomeModal').classList.add('open');
+  const b = document.getElementById('welcomeSyncBtn'); if (b && typeof syncEnabled === 'function' && syncEnabled()) b.style.display = '';
+}
 function welcomeStart() { document.getElementById('welcomeModal').classList.remove('open'); openPlanSettings('exam'); }
 function welcomeTemplate() {
   document.getElementById('welcomeModal').classList.remove('open');

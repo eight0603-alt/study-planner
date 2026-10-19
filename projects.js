@@ -9,7 +9,7 @@ const PROJ_LIST_KEY = 'sp-projects';
 const PROJ_ACTIVE_KEY = 'sp-active';
 
 function rawGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
-function rawSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error(e); } }
+function rawSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); if (typeof syncMark === 'function') syncMark(k); } catch (e) { console.error(e); } }
 
 function getProjects() {
   let list = rawGet(PROJ_LIST_KEY);
@@ -18,7 +18,8 @@ function getProjects() {
     const cfg = rawGet('plan-config');
     if (cfg && cfg.exam && cfg.exam.name) name = cfg.exam.name;
     list = [{ id: 'default', name }];
-    rawSet(PROJ_LIST_KEY, list);
+    try { localStorage.setItem(PROJ_LIST_KEY, JSON.stringify(list)); } catch (e) { console.error(e); }
+    if (typeof syncMarkWeak === 'function') syncMarkWeak(PROJ_LIST_KEY);
   }
   return list;
 }
@@ -29,7 +30,7 @@ function activeProjectId() {
 function activeProject() { const id = activeProjectId(); return getProjects().find(p => p.id === id); }
 function projPrefix(id) { id = id || activeProjectId(); return id === 'default' ? '' : `p:${id}:`; }
 function projKey(k) { return projPrefix() + k; }
-const isGlobalKey = k => k === PROJ_LIST_KEY || k === PROJ_ACTIVE_KEY;
+const isGlobalKey = k => k === PROJ_LIST_KEY || k === PROJ_ACTIVE_KEY || k === 'sp-sync-meta' || k === 'sp-sync-uid';
 // All keys that belong to a project, without their prefix
 function projectLocalKeys(id) {
   const pre = projPrefix(id), out = [];
@@ -70,7 +71,7 @@ function deleteProject() {
   if (list.length < 2) { alert('至少要保留一個專案'); return; }
   if (!confirm(`確定要刪除「${p.name}」嗎？\n這個專案的課表、筆記、打勾紀錄和習慣都會一起刪除，無法復原。`)) return;
   const pre = projPrefix(id);
-  projectLocalKeys(id).forEach(k => localStorage.removeItem(pre + k));
+  projectLocalKeys(id).forEach(k => { localStorage.removeItem(pre + k); if (typeof syncMark === 'function') syncMark(pre + k); });
   rawSet(PROJ_LIST_KEY, list.filter(x => x.id !== id));
   rawSet(PROJ_ACTIVE_KEY, list.find(x => x.id !== id).id);
   location.reload();

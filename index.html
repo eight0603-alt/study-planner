@@ -6,7 +6,7 @@
 <title>Study Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -42,6 +42,7 @@
     </button></li>
   </ul>
   <div class="sidebar-footer">
+    <div id="syncBox" class="sync-box"></div>
     <div class="exam-countdown" id="examCountdown"></div>
   </div>
 </nav>
@@ -312,14 +313,16 @@
     <h2 class="modal-title">歡迎使用 Study Planner</h2>
     <p class="rv-hint" style="margin:0 0 18px">先設定考試日期和要讀的科目，系統會自動排好每天的上課與複習。之後隨時可以在左側「設定」修改。</p>
     <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="cancel-btn" id="welcomeSyncBtn" style="display:none;margin-right:auto" onclick="document.getElementById('welcomeModal').classList.remove('open');syncSignIn()">已有資料？Google 登入</button>
       <button class="cancel-btn" onclick="welcomeTemplate()">套用會計師範本</button>
       <button class="small-btn" style="padding:6px 18px" onclick="welcomeStart()">開始設定</button>
     </div>
   </div>
 </div>
 
-<script src="projects.js?v=1"></script>
+<script src="sync.js?v=1"></script>
+<script src="projects.js?v=2"></script>
 <script src="plan.js?v=2"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

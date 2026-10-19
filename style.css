@@ -831,3 +831,15 @@ body { display: flex; }
 .proj-select { width: 100%; background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; font-size: 13px; cursor: pointer; }
 .proj-select:focus { outline: none; border-color: var(--accent); }
 .ps-danger { color: var(--danger) !important; border-color: rgba(248,81,73,.4) !important; }
+/* Cloud sync box */
+.sync-box { margin-bottom: 14px; }
+.sync-login { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; }
+.sync-login:hover { border-color: var(--accent); }
+.sync-user { font-size: 11px; line-height: 1.5; }
+.sync-status { font-weight: 600; }
+.sync-synced { color: var(--accent-2); }
+.sync-saving, .sync-connecting { color: var(--text-2); }
+.sync-error { color: var(--warn); }
+.sync-email { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-logout { background: none; border: none; color: var(--text-3); font-size: 11px; padding: 0; cursor: pointer; text-decoration: underline; }
+.sync-logout:hover { color: var(--text); }
