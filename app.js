@@ -103,6 +103,7 @@ function switchView(view) {
   if (view==='daily')     renderDaily();
   if (view==='habits')    renderHabits();
   if (view==='settings')  renderSettings();
+  if (view==='gcal')      renderGcal();
 }
 
 // ── Countdown ─────────────────────────────────────
