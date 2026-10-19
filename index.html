@@ -6,7 +6,7 @@
 <title>Study Planner — Sophie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -46,7 +46,10 @@
   <section id="view-dashboard" class="view active">
     <header class="view-header">
       <h1>儀表板</h1>
-      <span class="view-date" id="dashDate"></span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="view-date" id="dashDate"></span>
+        <button class="small-btn rv-open-btn" onclick="openReviewSettings()">複習設定</button>
+      </div>
     </header>
 
     <div class="dash-grid">
@@ -107,6 +110,7 @@
                onkeydown="calMonthKey(event)" onfocus="this.select()" onblur="if(!this.classList.contains('invalid'))this.value=`${calYear}年 ${MONTHS_CN[calMonth]}`">
         <button class="icon-btn" onclick="calNext()">&#8594;</button>
         <button class="small-btn" style="font-size:11px;padding:3px 10px" onclick="calToday()">今天</button>
+        <button class="small-btn rv-open-btn" onclick="openReviewSettings()">複習設定</button>
       </div>
     </header>
     <div class="cal-legend" id="calLegend"></div>
@@ -284,7 +288,28 @@
   </div>
 </div>
 
+<div id="reviewModal" class="modal-overlay" onclick="closeReviewSettings(event)">
+  <div class="modal" style="max-width:520px">
+    <button class="modal-close" onclick="closeReviewSettings()">✕</button>
+    <h2 class="modal-title">複習設定</h2>
+    <p class="rv-hint">勾選要排複習的科目，並設定每科複習到哪一天。今天以前的複習不會變動。</p>
+    <div class="rv-head"><span>科目</span><span>複習到</span><span>預計</span></div>
+    <div id="reviewRows"></div>
+    <div class="rv-all">
+      <span>全部改為</span>
+      <input id="reviewAllEnd" class="todo-input field-input rv-date" type="date" min="2026-11-03" max="2027-08-19">
+      <button class="cancel-btn" onclick="applyReviewEndToAll()">套用</button>
+    </div>
+    <div class="rv-foot">
+      <span id="reviewTotal" class="rv-total"></span>
+      <button class="cancel-btn" onclick="resetReviewSettings()">恢復預設</button>
+      <button class="cancel-btn" onclick="closeReviewSettings()">取消</button>
+      <button class="small-btn" style="padding:6px 18px" onclick="submitReviewSettings()">儲存</button>
+    </div>
+  </div>
+</div>
+
 <script src="data.js?v=14"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
