@@ -100,6 +100,17 @@ function badgeClass(t) { return t==='class'?'badge-class':t==='review'?'badge-re
 function badgeLabel(t) { return t==='class'?'上課':t==='review'?'複習':'行程'; }
 
 // ── View switcher ─────────────────────────────────
+// Left menu: hide / show (remembered on this device only)
+function toggleSidebar(hide) {
+  if (hide === undefined) hide = !document.body.classList.contains('sb-hidden');
+  document.body.classList.toggle('sb-hidden', hide);
+  try { localStorage.setItem('sp-ui-sidebar', hide ? 'hidden' : 'shown'); } catch (e) {}
+  if (document.getElementById('view-calendar')?.classList.contains('active')) { try { renderCalendar(); } catch (e) {} }
+}
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === '\\') { e.preventDefault(); toggleSidebar(); }
+});
+
 function switchView(view) {
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
@@ -868,6 +879,14 @@ function renderTimeline() {
   }
 
   tl.innerHTML = html;
+  // Scroll the timeline to "now" (today) or the first item, so it isn't stuck at 06:00
+  const wrap = tl.closest('.timeline-wrap');
+  if (wrap) {
+    const tops = [...tl.querySelectorAll('.tl-now, .tl-col > .tl-event')].map(e => parseFloat(e.style.top)).filter(n => !isNaN(n));
+    const nowEl = tl.querySelector('.tl-now');
+    const target = nowEl ? parseFloat(nowEl.style.top) : (tops.length ? Math.min(...tops) : 0);
+    wrap.scrollTop = Math.max(0, target - 60);
+  }
 }
 
 function renderDaily(){
