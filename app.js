@@ -619,7 +619,8 @@ function toggleModalDone(ds, idx) {
   toggleModalDoneAll(ds, `builtin-${idx}`);
 }
 
-function deleteModalEvent(ds, srcType, srcIdx) {
+// Remove one item from a day's calendar
+function removeCalendarItem(ds, srcType, srcIdx) {
   if(srcType==='custom'){
     const evs=getCustomEvents(ds); evs.splice(srcIdx,1); saveCustomEvents(ds,evs);
   } else if(srcType==='moved'){
@@ -630,6 +631,17 @@ function deleteModalEvent(ds, srcType, srcIdx) {
     if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
     storage(`hidden-${ds}`,hidden);
   }
+}
+function deleteModalEvent(ds, srcType, srcIdx) {
+  // The daily list follows: drop the bullet for this item, whatever its status (◎ records stay)
+  const item=allEventsOn(ds).find(x=>x.srcType===srcType && x.srcIdx===srcIdx);
+  if(item){
+    const bl=getBullets(ds);
+    const i=bl.findIndex(b=>b.status!=='scheduled' && bulletMatchesEvent(b,item.ev));
+    if(i>=0){ bl.splice(i,1); saveBullets(ds,bl); }
+  }
+  removeCalendarItem(ds, srcType, srcIdx);
+  try { reconcileDayBullets(ds); } catch(e) {}
   renderModalContent();
   const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
   if(cont) buildCalDayEvents(cont,ds);
@@ -1136,9 +1148,18 @@ function updateBulletText(idx,text){
   const bullets=getBullets(dailyDate); bullets[idx].text=text; saveBullets(dailyDate,bullets);
 }
 function deleteBullet(idx){
-  const bullets=getBullets(dailyDate); const [gone]=bullets.splice(idx,1); saveBullets(dailyDate,bullets);
-  if(gone && gone.status==='done') syncCalendarFromBullet(dailyDate, {...gone, status:'todo'});
+  const bullets=getBullets(dailyDate); const gone=bullets[idx]; if(!gone) return;
+  // A bullet that stands for a calendar item: delete that item from the calendar too
+  if(gone.status!=='scheduled'){
+    const item=allEventsOn(dailyDate).find(({ev})=>bulletMatchesEvent(gone,ev));
+    if(item){
+      if(gone.status==='done') syncCalendarFromBullet(dailyDate, {...gone, status:'todo'});
+      removeCalendarItem(dailyDate, item.srcType, item.srcIdx);
+    }
+  }
+  bullets.splice(idx,1); saveBullets(dailyDate,bullets);
   renderBullets();
+  try { renderTimeline(); } catch(e) {}
 }
 function ensureScheduleBullets(ds) {
   // Auto-add schedule events as bullet entries if not done yet for this day
