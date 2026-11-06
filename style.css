@@ -995,3 +995,26 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 }
 
 .nav-short { display: none; }
+
+/* Foldable iPhone (Duo): folded ~466x678, unfolded ~890x626 */
+/* Unfolded: 3-column daily page */
+@media (min-width: 760px) and (max-width: 1024px) and (orientation: landscape) {
+  .main { padding: 18px 20px; }
+  .daily-layout, .daily-layout--3col { grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .daily-layout--3col > :last-child { grid-column: auto; }
+  .daily-layout--3col > :first-child { grid-row: auto; }
+  .timeline-wrap { max-height: calc(100vh - 150px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .cal-table td { height: 78px; }
+  .view-header { margin-bottom: 12px; }
+}
+/* Folded: compact header, safe-area padding */
+@media (max-width: 700px) and (min-width: 420px) and (max-height: 760px) {
+  .sidebar { padding-top: calc(env(safe-area-inset-top) + 4px); padding-bottom: 4px; }
+  .main, body.sb-hidden .main { padding-top: 10px; padding-left: calc(env(safe-area-inset-left) + 14px); padding-right: calc(env(safe-area-inset-right) + 14px); }
+  .nav-links { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  .nav-btn { padding: 4px 0; }
+  .timeline-wrap { max-height: 280px; }
+  .view-header { margin-bottom: 10px; }
+  .stat-cards { grid-template-columns: repeat(4, 1fr); }
+  .cal-table td { height: 58px; }
+}
