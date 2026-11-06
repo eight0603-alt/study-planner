@@ -800,10 +800,10 @@ function submitTimeEvent() {
     evs.push(ev);
   }
   evs.sort((a,b) => a.start.localeCompare(b.start));
-  saveTimeEvents(targetDs, evs);
+  saveTimeEvents(targetDs, evs); if(editingTevIdx===null && !allEventsOn(targetDs).some(x=>x.ev.course===course)){ const cs=getCustomEvents(targetDs); cs.push({course, type, label:start+'–'+end, progress:'', custom:true}); saveCustomEvents(targetDs,cs); try{reconcileDayBullets(targetDs);}catch(e){} }
   document.getElementById('timeEventModal').classList.remove('open');
   // Refresh timeline if on daily view
-  if (targetDs === dailyDate) renderTimeline();
+  if (targetDs === dailyDate) { renderTimeline(); try{renderBullets();}catch(e){} } try{ const c2=document.querySelector('.ev-container[data-ds="'+targetDs+'"]'); if(c2) buildCalDayEvents(c2,targetDs); }catch(e){}
   // Refresh calendar modal if open
   if (modalDate && document.getElementById('dayModal').classList.contains('open')) {
     renderModalContent();
@@ -812,7 +812,7 @@ function submitTimeEvent() {
 
 function deleteTimeEvent(idx) {
   const evs = getTimeEvents(dailyDate);
-  evs.splice(idx,1);
+  const gone=evs[idx]; evs.splice(idx,1); if(gone){ const cs=getCustomEvents(dailyDate), ci=cs.findIndex(c=>c.course===gone.course&&c.label===gone.start+'–'+gone.end); if(ci>=0){ const bl=getBullets(dailyDate), bi=bl.findIndex(b=>b.status!=='scheduled'&&b.ref&&b.ref.course===gone.course); if(bi>=0){bl.splice(bi,1);saveBullets(dailyDate,bl);} cs.splice(ci,1); saveCustomEvents(dailyDate,cs); } }
   saveTimeEvents(dailyDate, evs);
   renderTimeline();
 }
