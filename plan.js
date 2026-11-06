@@ -16,7 +16,7 @@ const MARKER_COLORS = { reg: '#E3A857', exam: '#F85149' };
 // The CPA plan this app was first built for — offered as a one-click template.
 const TEMPLATE_CPA = {
   exam: { name: '會計師', start: '2027/08/20', end: '2027/08/22', regStart: '', regEnd: '' },
-  study: { start: '2026/11/03', end: '2027/08/19' },
+  study: { start: '2026/11/11', end: '2027/08/19' },
   slots: [2, 2, 2, 2, 2, 3, 3],
   slotTimes: { weekday: ['14:00-16:30', '19:30-22:00'], weekend: ['14:00-16:30', '17:00-19:30', '20:00-22:30'] },
   keepReview: true,
