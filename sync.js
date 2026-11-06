@@ -143,14 +143,19 @@ function syncOnSnapshot(snap) {
   } catch (e) { console.error(e); }
 }
 
+function syncLinks(del) {
+  return `<div class="sync-links" style="margin-top:8px;font-size:11px;opacity:.75;line-height:1.8">
+    <a href="#" onclick="syncExportData();return false" style="color:inherit">匯出我的資料</a>${del ? ` · <a href="#" onclick="syncDeleteAccount();return false" style="color:inherit">刪除帳號</a>` : ''}<br>
+    <a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">隱私權政策</a> · <a href="terms.html" target="_blank" rel="noopener" style="color:inherit">使用條款</a></div>`;
+}
 function setSyncState(s) { syncState = s; renderSyncBox(); }
 function renderSyncBox() {
   const box = document.getElementById('syncBox'); if (!box) return;
-  if (!syncEnabled()) { box.innerHTML = ''; return; }
+  if (!syncEnabled()) { box.innerHTML = syncLinks(false); return; }
   if (!syncUser) {
     box.innerHTML = `<button class="sync-login" onclick="syncSignIn()">
       <svg viewBox="0 0 24 24" width="14" height="14"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6a5 5 0 0 1-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 14c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7H2a11 11 0 0 0 0 9.9L5.7 14z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2 7l3.7 2.9C6.6 7.3 9.1 5.4 12 5.4z"/></svg>
-      Google 登入・雲端同步</button>`;
+      Google 登入・雲端同步</button>` + syncLinks(false);
     return;
   }
   const label = { connecting: '連線中…', synced: '✓ 已同步', saving: '同步中…', error: '⚠ 同步失敗，稍後重試' }[syncState] || '';
@@ -158,7 +163,7 @@ function renderSyncBox() {
       <div class="sync-status sync-${syncState}">${label}</div>
       <div class="sync-email" title="${syncUser.email || ''}">${syncUser.email || ''}</div>
       <button class="sync-logout" onclick="syncSignOut()">登出</button>
-    </div>`;
+    </div>` + syncLinks(true);
 }
 
 async function syncSignIn() {
@@ -178,6 +183,50 @@ async function syncSignOut() {
   syncClearLocal();
   await firebase.auth().signOut();
   location.reload();
+}
+// Download everything stored in this browser as a JSON file (data portability)
+function syncExportData() {
+  const out = { app: 'study-planner', exportedAt: new Date().toISOString(), data: {} };
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || LOCAL_ONLY.has(k)) continue;
+    try { out.data[k] = JSON.parse(localStorage.getItem(k)); } catch { out.data[k] = localStorage.getItem(k); }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+  a.download = 'study-planner-export-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+// Permanently delete the cloud copy and the Google-linked account record, then clear this browser
+async function syncDeleteAccount() {
+  if (!syncUser) return;
+  if (!confirm('這會永久刪除你的雲端資料與帳號，且無法復原。\n建議先按「匯出我的資料」備份。\n\n確定要刪除嗎？')) return;
+  if (prompt('請輸入「刪除」二字以確認') !== '刪除') return;
+  try {
+    clearTimeout(syncFlushTimer);
+    if (syncUnsub) { syncUnsub(); syncUnsub = null; }
+    const user = firebase.auth().currentUser;
+    const col = syncDb.collection('users').doc(user.uid).collection('kv');
+    const snap = await col.get();
+    let batch = syncDb.batch(), n = 0;
+    for (const d of snap.docs) { batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = syncDb.batch(); } }
+    await batch.commit();
+    try { await user.delete(); }
+    catch (e) {
+      if (e && e.code === 'auth/requires-recent-login') {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await user.reauthenticateWithPopup(provider);
+        await firebase.auth().currentUser.delete();
+      } else throw e;
+    }
+    syncClearLocal();
+    alert('帳號與雲端資料已刪除。');
+    location.reload();
+  } catch (e) {
+    console.error(e);
+    alert('刪除失敗：' + (e.message || e.code || e) + '\n雲端資料可能已部分刪除，請重新登入後再試一次。');
+  }
 }
 // Remove every app key from this browser (used on sign-out / account switch)
 function syncClearLocal() {
