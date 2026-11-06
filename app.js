@@ -17,7 +17,7 @@ let modalDate  = null;
 let dragInfo   = null;  // { ev, fromDs, srcType, srcIdx }
 
 // ── Storage ───────────────────────────────────────
-function storage(key, val) {
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); const jsAttr = s => JSON.stringify(String(s == null ? '' : s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); function storage(key, val) {
   if (val === undefined) {
     try { return JSON.parse(localStorage.getItem(projKey(key))); } catch { return null; }
   }
@@ -248,7 +248,7 @@ function renderDashboard() {
     const pct=Math.min(100,Math.round(doneOf(c)/c.total*100));
     return `<div class="course-row">
       <div class="course-row-top">
-        <span class="course-name" style="color:${c.color}">${c.name}</span>
+        <span class="course-name" style="color:${c.color}">${escH(c.name)}</span>
         <span class="course-pct">${doneOf(c)}/${c.total} (${pct}%)</span>
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${c.color}"></div></div>
@@ -262,8 +262,8 @@ function renderDashboard() {
     const color=evColor(ev);
     return `<div class="schedule-item">
       <div class="schedule-dot" style="background:${color}"></div>
-      <div><div class="schedule-course">${ev.course}<span class="badge ${badgeClass(ev.type)}">${badgeLabel(ev.type)}</span></div>
-      <div class="schedule-detail">${ev.label||ev.progress||''}</div></div>
+      <div><div class="schedule-course">${escH(ev.course)}<span class="badge ${badgeClass(ev.type)}">${badgeLabel(ev.type)}</span></div>
+      <div class="schedule-detail">${escH(ev.label||ev.progress||'')}</div></div>
     </div>`;
   }).join('');
 
@@ -275,7 +275,7 @@ function renderDashboard() {
     const items=allEventsOn(ds);
     const chips=items.map(({ev})=>{
       const c=evColor(ev);
-      return `<span class="week-chip" style="background:${c}22;color:${c};opacity:${ev.type==='review'?.6:1}">${ev.course.length>8?ev.course.slice(0,8)+'…':ev.course}</span>`;
+      return `<span class="week-chip" style="background:${c}22;color:${c};opacity:${ev.type==='review'?.6:1}">${escH(ev.course.length>8?ev.course.slice(0,8)+'…':ev.course)}</span>`;
     }).join('')||'<span style="color:var(--text-3);font-size:11px">—</span>';
     weekHTML+=`<div class="week-row">
       <div class="week-day" style="${isToday?'color:var(--accent)':''}">
@@ -295,7 +295,7 @@ function renderDashboard() {
   milestones.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('upcomingMilestones').innerHTML=milestones.slice(0,6).map(m=>`
     <div class="milestone-item">
-      <span style="color:${m.color}">${m.done?'✓ ':''}${m.name}</span>
+      <span style="color:${m.color}">${m.done?'✓ ':''}${escH(m.name)}</span>
       <span class="milestone-date">${m.date}</span>
     </div>`).join('');
 }
@@ -306,7 +306,7 @@ function renderCalendar() {
   if(ci && document.activeElement!==ci){ ci.value=`${calYear}年 ${MONTHS_CN[calMonth]}`; ci.classList.remove('invalid'); }
   const legendEl=document.getElementById('calLegend');
   legendEl.innerHTML=SCHEDULE_DATA.courses.map(c=>
-    `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${c.name}</div>`
+    `<div class="legend-item"><div class="legend-swatch" style="background:${c.color}"></div>${escH(c.name)}</div>`
   ).join('')+`
     ${PLAN.appts.map(a=>`<div class="legend-item"><div class="legend-swatch" style="background:${a.color}"></div>${esc(a.name)}</div>`).join('')}
     ${(PLAN.exam.regStart||PLAN.exam.regEnd)?`<div class="legend-item"><div class="legend-swatch" style="background:${MARKER_COLORS.reg}"></div>報名</div>`:''}
@@ -557,18 +557,18 @@ function renderModalContent() {
     html+=`<div class="modal-event-row${done?' ev-done':''}">
       <div class="schedule-dot" style="background:${color}"></div>
       <div style="flex:1">
-        <div class="schedule-course">${ev.course}
+        <div class="schedule-course">${escH(ev.course)}
           <span class="badge ${badgeClass(ev.type)}">${badgeLabel(ev.type)}</span>
           ${done?'<span class="badge" style="background:rgba(63,185,80,.15);color:var(--accent-2)">✓完成</span>':''}
           ${isMoved?'<span class="badge" style="background:rgba(139,148,158,.15);color:var(--text-2)">已移入</span>':''}
           ${isCustom?'<span class="badge" style="background:rgba(139,148,158,.15);color:var(--text-2)">自訂</span>':''}
         </div>
         <div class="schedule-detail">
-          ${timeStr?`⏱ ${timeStr}`:ev.label||''} ${ev.progress&&ev.progress!=='—'?'('+ev.progress+')':''}
+          ${timeStr?`⏱ ${escH(timeStr)}`:escH(ev.label||'')} ${ev.progress&&ev.progress!=='—'?'('+escH(ev.progress)+')':''}
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="ev-action-btn" onclick="setTimeForEvent('${ds}','${ev.course}','${ev.type}')" title="設定時間">⏱</button>
+        <button class="ev-action-btn" onclick="setTimeForEvent(${jsAttr(ds)},${jsAttr(ev.course)},${jsAttr(ev.type)})" title="設定時間">⏱</button>
         <button class="ev-action-btn" onclick="editModalEvent('${ds}','${srcType}',${srcIdx})" title="編輯">✎</button>
         <button class="ev-action-btn" onclick="toggleModalDoneAll('${ds}','${doneKey}')" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>
         <button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>
@@ -854,8 +854,8 @@ function renderTimeline() {
     const height = Math.max(24, minutesToPx(timeToMinutes(ev.end)) - top);
     html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44"
               onclick="openAddTimeEvent(${i})">
-      <div class="tl-event-name">${ev.course}</div>
-      <div class="tl-event-time">${ev.start}–${ev.end}${ev.note?' · '+ev.note:''}</div>
+      <div class="tl-event-name">${escH(ev.course)}</div>
+      <div class="tl-event-time">${ev.start}–${ev.end}${ev.note?' · '+escH(ev.note):''}</div>
       <button class="tl-event-del" onclick="event.stopPropagation();deleteTimeEvent(${i})">✕</button>
     </div>`;
   });
@@ -869,7 +869,7 @@ function renderTimeline() {
     const top = minutesToPx(timeToMinutes(t.start));
     const height = Math.max(24, minutesToPx(timeToMinutes(t.end)) - top);
     html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44">
-      <div class="tl-event-name">${ev.course}${ev.label && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+ev.label+'</span>' : ''}</div>
+      <div class="tl-event-name">${escH(ev.course)}${ev.label && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(ev.label)+'</span>' : ''}</div>
       <div class="tl-event-time">${t.start}–${t.end}</div>
     </div>`;
   });
@@ -884,7 +884,7 @@ function renderTimeline() {
     unscheduled.forEach(({ev})=>{
       const color=evColor(ev);
       html+=`<div class="tl-event tl-event-unsched" style="background:${color}22;color:${color};border:1px dashed ${color}55">
-        <div class="tl-event-name">${ev.course} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>
+        <div class="tl-event-name">${escH(ev.course)} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>
       </div>`;
     });
     html += '</div>';
@@ -990,7 +990,7 @@ function renderTodos(){
       const done = donedAuto.includes(i);
       html += `<li class="todo-item">
         <div class="todo-check${done?' done':''}" onclick="toggleAutoTodo(${i})"></div>
-        <span class="todo-text${done?' done':''}" style="color:${color}">${t.text}</span>
+        <span class="todo-text${done?' done':''}" style="color:${color}">${escH(t.text)}</span>
       </li>`;
     });
   }
@@ -1001,7 +1001,7 @@ function renderTodos(){
     html += userTodos.map((t,i) => `
       <li class="todo-item">
         <div class="todo-check${t.done?' done':''}" onclick="toggleTodo(${i})"></div>
-        <span class="todo-text${t.done?' done':''}">${t.text}</span>
+        <span class="todo-text${t.done?' done':''}">${escH(t.text)}</span>
         <button class="todo-del" onclick="deleteTodo(${i})">✕</button>
       </li>`).join('');
   }
@@ -1075,7 +1075,7 @@ function openBulletMenu(idx, btn){
          <input id="bmDate" type="date" class="todo-input field-input" value="${next.replace(/\//g,'-')}">
          <button class="small-btn" style="padding:4px 10px" onclick="scheduleBullet(${idx}, document.getElementById('bmDate').value)">移過去</button>
        </div>
-       ${b.movedTo?`<div class="bm-note">目前排在 ${b.movedTo}</div>`:''}
+       ${b.movedTo?`<div class="bm-note">目前排在 ${escH(b.movedTo)}</div>`:''}
      </div>`;
   document.body.appendChild(m);
   const r=btn.getBoundingClientRect();
@@ -1213,10 +1213,10 @@ function renderBullets(){
   ul.innerHTML=bullets.map((b,i)=>`
     <li class="bullet-item ${BULLET_CLASSES[b.status]||''}">
       <button class="bullet-status-btn" onclick="openBulletMenu(${i},this)" title="點擊選擇狀態">${BULLET_SYMBOLS[b.status]||'•'}</button>
-      <input class="bullet-text" type="text" value="${b.text.replace(/"/g,'&quot;')}"
+      <input class="bullet-text" type="text" value="${escH(b.text)}"
         onchange="updateBulletText(${i},this.value)" onblur="updateBulletText(${i},this.value)">
-      ${b.status==='scheduled'&&b.movedTo?`<button class="bullet-link" onclick="gotoDaily('${b.movedTo}')" title="前往那一天">→ ${b.movedTo.slice(5)}</button>`:''}
-      ${b.from?`<button class="bullet-link bullet-link--from" onclick="gotoDaily('${b.from}')" title="從這天移過來">← ${b.from.slice(5)}</button>`:''}
+      ${b.status==='scheduled'&&b.movedTo?`<button class="bullet-link" onclick="gotoDaily(${jsAttr(b.movedTo)})" title="前往那一天">→ ${escH(String(b.movedTo).slice(5))}</button>`:''}
+      ${b.from?`<button class="bullet-link bullet-link--from" onclick="gotoDaily(${jsAttr(b.from)})" title="從這天移過來">← ${escH(String(b.from).slice(5))}</button>`:''}
       <button class="bullet-del-btn" onclick="deleteBullet(${i})">✕</button>
     </li>`).join('');
 }
@@ -1244,13 +1244,13 @@ function renderHabits(){
   });
   html+='</tr></thead><tbody>';
   habits.forEach((habit,hi)=>{
-    html+=`<tr><td><div class="habit-name-cell">${habit}<button class="habit-del" onclick="deleteHabit(${hi})">✕</button></div></td>`;
+    html+=`<tr><td><div class="habit-name-cell">${escH(habit)}<button class="habit-del" onclick="deleteHabit(${hi})">✕</button></div></td>`;
     days.forEach(d=>{
       const ds=fmtDate(d); const done=storage(`habit-${habit}-${ds}`);
       const isFuture=d>today; const isToday=ds===fmtDate(today);
       html+=`<td class="habit-check-cell${isToday?' today-col':''}">
         <div class="habit-dot${done?' done':''}${isFuture?' future':''}"
-          onclick="${isFuture?'':(`toggleHabit('${habit.replace(/'/g,"\\'")}','${ds}')`)}"></div></td>`;
+          onclick="${isFuture?'':(`toggleHabit(${jsAttr(habit)},${jsAttr(ds)})`)}"></div></td>`;
     });
     html+='</tr>';
   });
