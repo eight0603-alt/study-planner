@@ -541,7 +541,7 @@ function renderModalContent() {
   const completed=getCompleted(ds);  // stores composite keys "srcType-srcIdx"
   let html='';
 
-  if(!items.length) html='<p class="empty-state">無排定行程，可在下方新增</p>';
+  window.restoreDefaultDay=function(d){storage('hidden-'+d,null);renderModalContent();if(typeof renderCalendar==='function')renderCalendar();}; if((storage('hidden-'+ds)||[]).length) html+='<button class="small-btn" style="margin-bottom:10px" onclick="restoreDefaultDay(\''+ds+'\')">↺ 還原這天的預設行程</button>'; if(!items.length) html+='<p class="empty-state">無排定行程，可在下方新增</p>';
 
   items.forEach(({ev,srcType,srcIdx},i)=>{
     const color=evColor(ev);
