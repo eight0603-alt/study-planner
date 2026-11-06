@@ -34,8 +34,8 @@ const TEMPLATE_CPA = {
     { name: '公司法',         color: '#82B874', total: 10, per: 1, mode: 'weekly', days: [6],    start: '2027/01/17', end: '', review: true,  reviewEnd: '' },
   ],
   appts: [
-    { name: '瑜伽', color: '#5EAA6E', weekday: 5, every: 1, first: '2026/11/07', time: '9:30-11:30' },
-    { name: '美甲', color: '#C4678A', weekday: 5, every: 4, first: '2026/11/07', time: '13:00-15:00' },
+    { name: '瑜伽', color: '#5EAA6E', weekday: 5, every: 1, first: '2026/11/11', time: '9:30-11:30' },
+    { name: '美甲', color: '#C4678A', weekday: 5, every: 4, first: '2026/11/11', time: '13:00-15:00' },
   ],
 };
 
