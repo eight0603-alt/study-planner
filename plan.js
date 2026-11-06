@@ -119,7 +119,7 @@ function examDateObj() { return PLAN && isDs(PLAN.exam.start) ? parseDate(PLAN.e
 // ── Build the whole schedule from a config ───────────────────────────────
 // frozen: { ds: [events] } days that must stay exactly as they were
 function buildSchedule(p, frozen) {
-  frozen = frozen || {};
+  frozen = Object.fromEntries(Object.entries(frozen || {}).filter(([ds]) => ds >= p.study.start));
   const out = {}, info = {};
   const start = p.study.start, end = studyEnd(p);
   const courses = p.courses;
