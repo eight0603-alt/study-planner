@@ -17,13 +17,16 @@ let modalDate  = null;
 let dragInfo   = null;  // { ev, fromDs, srcType, srcIdx }
 
 // ── Storage ───────────────────────────────────────
-const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); const jsAttr = s => JSON.stringify(String(s == null ? '' : s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); function storage(key, val) {
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); const jsAttr = s => JSON.stringify(String(s == null ? '' : s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+let storageVer = 0;
+function storage(key, val) {
   if (val === undefined) {
     try { return JSON.parse(localStorage.getItem(projKey(key))); } catch { return null; }
   }
-  if (val === null) { localStorage.removeItem(projKey(key)); syncMark(projKey(key)); return; }
+  if (val === null) { localStorage.removeItem(projKey(key)); syncMark(projKey(key)); storageVer++; return; }
   localStorage.setItem(projKey(key), JSON.stringify(val));
   syncMark(projKey(key));
+  storageVer++;
 }
 function getCustomEvents(ds)        { return storage(`custom-${ds}`) || []; }
 function saveCustomEvents(ds, evs)  { storage(`custom-${ds}`, evs); }
@@ -63,7 +66,7 @@ function eventTime(ds, ev) {
   if (ev.type==='class' || ev.type==='review') {
     const study = (SCHEDULE_DATA.schedule[ds]||[]).filter(e => e.type==='class' || e.type==='review');
     const n = study.indexOf(ev);
-    if (n >= 0 && typeof slotTime === 'function') return slotTime(ds, n);
+    if (n >= 0 && typeof studySlotTime === 'function') return studySlotTime(ds, ev, study);
   }
   return null;
 }
@@ -72,6 +75,41 @@ function orphanTimeEvents(ds) {
   const names = new Set(allEventsOn(ds).map(x => x.ev.course));
   return getTimeEvents(ds).filter(t => !names.has(t.course));
 }
+// ── Session numbers follow what is actually on the calendar ──
+// Planned labels (第3堂, 第2次複習, 3/40) are fixed when the plan is built; after items are
+// deleted or moved the numbers shown are recounted in calendar order, per course.
+let _lblCache = null, _lblVer = -1, _lblSched = null;
+const LBL_CLASS = /^第\d+(?:-\d+)?堂$/, LBL_REVIEW = /^第\d+次複習$/, LBL_PROG = /^\d+\/\d+$/;
+const lblKey = (ds, ev) => `${ds}|${ev.type}|${ev.course}|${ev.label||''}`;
+function labelMap() {
+  if (_lblCache && _lblVer === storageVer && _lblSched === SCHEDULE_DATA.schedule) return _lblCache;
+  const days = new Set(Object.keys(SCHEDULE_DATA.schedule));
+  try { projectLocalKeys().forEach(k => { const m = /^(?:moved|custom)-(\d{4}\/\d{2}\/\d{2})$/.exec(k); if (m) days.add(m[1]); }); } catch (e) {}
+  const totals = {};
+  try { (PLAN && PLAN.courses || []).forEach(c => { totals[c.name] = c.total; }); } catch (e) {}
+  const cls = {}, rv = {}, map = new Map();
+  [...days].sort().forEach(ds => {
+    allEventsOn(ds).forEach(({ ev }) => {
+      const c = ev.course;
+      if (ev.type === 'class' && LBL_CLASS.test(ev.label || '')) {
+        const n = sessionNumbers(ev.label).length || 1, s = (cls[c] || 0) + 1, e = s + n - 1;
+        cls[c] = e;
+        map.set(lblKey(ds, ev), { label: n > 1 ? `第${s}-${e}堂` : `第${s}堂`, progress: totals[c] ? `${e}/${totals[c]}` : null });
+      } else if (ev.type === 'review' && LBL_REVIEW.test(ev.label || '')) {
+        rv[c] = (rv[c] || 0) + 1;
+        map.set(lblKey(ds, ev), { label: `第${rv[c]}次複習`, progress: null });
+      }
+    });
+  });
+  _lblCache = map; _lblVer = storageVer; _lblSched = SCHEDULE_DATA.schedule;
+  return map;
+}
+function evLabel(ds, ev) { const x = labelMap().get(lblKey(ds, ev)); return x ? x.label : (ev.label || ''); }
+function evProgress(ds, ev) {
+  const x = labelMap().get(lblKey(ds, ev));
+  return x && x.progress && LBL_PROG.test(ev.progress || '') ? x.progress : (ev.progress || '');
+}
+
 // Legacy compat
 function eventsOn(ds) { return allEventsOn(ds).map(x=>x.ev); }
 
@@ -145,7 +183,8 @@ function bulletMatchesEvent(b, ev) {
 }
 function eventBulletText(ds, ev) {
   const tm = eventTime(ds, ev);
-  return ev.course + (ev.label && ev.label!=='—' ? '　'+ev.label : '') + (tm ? ` (${tm.start}–${tm.end})` : '');
+  const lb = evLabel(ds, ev);
+  return ev.course + (lb && lb!=='—' ? '　'+lb : '') + (tm ? ` (${tm.start}–${tm.end})` : '');
 }
 // Calendar → daily: mark the matching daily bullet done / back to todo (adds it if missing)
 function setBulletDoneForEvent(ds, ev, done) {
@@ -259,11 +298,12 @@ function renderDashboard() {
   const tsEl = document.getElementById('todaySchedule');
   if(!todayItems.length){ tsEl.innerHTML='<p class="empty-state">今日無排定行程</p>'; }
   else tsEl.innerHTML=todayItems.map(({ev})=>{
+    const lb=evLabel(todayS, ev);
     const color=evColor(ev);
     return `<div class="schedule-item">
       <div class="schedule-dot" style="background:${color}"></div>
       <div><div class="schedule-course">${escH(ev.course)}<span class="badge ${badgeClass(ev.type)}">${badgeLabel(ev.type)}</span></div>
-      <div class="schedule-detail">${escH(ev.label||ev.progress||'')}</div></div>
+      <div class="schedule-detail">${escH(lb||evProgress(todayS, ev)||'')}</div></div>
     </div>`;
   }).join('');
 
@@ -564,7 +604,7 @@ function renderModalContent() {
           ${isCustom?'<span class="badge" style="background:rgba(139,148,158,.15);color:var(--text-2)">自訂</span>':''}
         </div>
         <div class="schedule-detail">
-          ${timeStr?`⏱ ${escH(timeStr)}`:escH(ev.label||'')} ${ev.progress&&ev.progress!=='—'?'('+escH(ev.progress)+')':''}
+          ${timeStr?`⏱ ${escH(timeStr)}`:escH(evLabel(ds, ev))} ${evProgress(ds, ev)&&evProgress(ds, ev)!=='—'?'('+escH(evProgress(ds, ev))+')':''}
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
@@ -869,7 +909,7 @@ function renderTimeline() {
     const top = minutesToPx(timeToMinutes(t.start));
     const height = Math.max(24, minutesToPx(timeToMinutes(t.end)) - top);
     html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44">
-      <div class="tl-event-name">${escH(ev.course)}${ev.label && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(ev.label)+'</span>' : ''}</div>
+      <div class="tl-event-name">${escH(ev.course)}${evLabel(dailyDate, ev) && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(evLabel(dailyDate, ev))+'</span>' : ''}</div>
       <div class="tl-event-time">${t.start}–${t.end}</div>
     </div>`;
   });
@@ -966,7 +1006,7 @@ function dailyDateKey(e){
 function getScheduleTodos(ds) {
   // Return today's schedule events as todo-like objects
   return allEventsOn(ds).map(({ev}) => ({
-    text: ev.course + (ev.label && ev.label !== '—' ? '　' + ev.label : ''),
+    text: ev.course + (ev.label && ev.label !== '—' ? '　' + evLabel(ds, ev) : ''),
     type: ev.type,
     course: ev.course,
     auto: true,
@@ -1191,7 +1231,8 @@ function reconcileDayBullets(ds){
     if(i<0){ missing.push({ev, isDone:done.includes(`${srcType}-${srcIdx}`)}); return; }
     used.add(i);
     const b=bullets[i], base=eventBulletText(ds,ev);
-    if(b.ref && stripBulletTime(b.text)===stripBulletTime(base) && b.text!==base){ b.text=base; changed=true; }
+    const autoText = t => { const s=stripBulletTime(t); return s===stripBulletTime(base) || (s.startsWith(ev.course+'　') && /^第[\d-]+(?:堂|次複習)$/.test(s.slice(ev.course.length+1))); };
+    if(b.ref && autoText(b.text) && b.text!==base){ b.text=base; changed=true; }
   });
   const keep=bullets.filter((b,j)=>{
     if(used.has(j) || !b.ref || b.status!=='todo') return true;

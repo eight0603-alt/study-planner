@@ -157,7 +157,7 @@ function gcalConflictsOn(ds) {
   allEventsOn(ds).forEach(({ ev }) => {
     if (ev.type !== 'class' && ev.type !== 'review') return;
     const t = eventTime(ds, ev); if (!t) return;
-    g.forEach(x => { if (t.start < x.end && x.start < t.end) out.push({ ds, ours: { name: ev.course + (ev.label && ev.label !== '—' ? ' ' + ev.label : ''), start: t.start, end: t.end }, theirs: x }); });
+    g.forEach(x => { if (t.start < x.end && x.start < t.end) out.push({ ds, ours: { name: ev.course + (ev.label && ev.label !== '—' ? ' ' + evLabel(ds, ev) : ''), start: t.start, end: t.end }, theirs: x }); });
   });
   return out;
 }

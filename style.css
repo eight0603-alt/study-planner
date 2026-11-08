@@ -1018,3 +1018,27 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
   .stat-cards { grid-template-columns: repeat(4, 1fr); }
   .cal-table td { height: 58px; }
 }
+
+/* Per-day class / review times */
+.ps-days { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ps-dt-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--bg3); border-radius: 8px; flex-wrap: wrap; }
+.ps-dt-row.ps-dt-off { opacity: .6; }
+.ps-dt-day { width: 44px; flex: none; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+.ps-dt-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.ps-dt-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ps-dt-kind { font-size: 11px; padding: 2px 8px; border-radius: 4px; flex: none; width: 40px; text-align: center; }
+.ps-dt-cls { background: rgba(88,166,255,.15); color: var(--accent); }
+.ps-dt-rev { background: rgba(63,185,80,.15); color: var(--accent-2); }
+.ps-dt-slot { display: inline-flex; align-items: center; gap: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px 2px 2px; }
+.ps-dt-time { width: 108px !important; padding: 4px 6px !important; border: 0 !important; background: transparent !important; font-size: 13px; }
+.ps-dt-dash { color: var(--text-3); font-size: 12px; }
+.ps-dt-x, .ps-dt-add { width: 22px; height: 22px; border-radius: 5px; color: var(--text-3); font-size: 12px; display: inline-grid; place-items: center; }
+.ps-dt-x:hover { color: var(--danger); background: rgba(248,81,73,.12); }
+.ps-dt-add { border: 1px dashed var(--border); }
+.ps-dt-add:hover { color: var(--accent); border-color: var(--accent); }
+.ps-dt-copy { flex: none; font-size: 11px; padding: 4px 10px; width: auto; }
+@media (max-width: 700px) {
+  .ps-dt-row { gap: 8px; padding: 8px; }
+  .ps-dt-day { width: 100%; flex-direction: row; gap: 8px; }
+  .ps-dt-time { width: 96px !important; }
+}

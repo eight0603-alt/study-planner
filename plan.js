@@ -20,6 +20,7 @@ const TEMPLATE_CPA = {
   slots: [2, 2, 2, 2, 2, 3, 3],
   slotTimes: { weekday: ['14:00-16:30', '19:30-22:00'], weekend: ['14:00-16:30', '17:00-19:30', '20:00-22:30'] },
   keepReview: true,
+  dayTimes: [0,1,2,3,4].map(() => ({ cls: ['14:00-16:30'], rev: ['19:30-22:00'] })).concat([5,6].map(() => ({ cls: ['14:00-16:30', '17:00-19:30'], rev: ['20:00-22:30'] }))),
   hoursPerSession: 2.5,
   courses: [
     { name: '中等會計學',     color: '#C9B84A', total: 70, per: 2, mode: 'weekly', days: [0, 4], start: '', end: '', review: true,  reviewEnd: '' },
@@ -46,6 +47,7 @@ function blankPlan() {
     slots: [2, 2, 2, 2, 2, 3, 3],
     slotTimes: { weekday: ['14:00-16:30', '19:30-22:00'], weekend: ['14:00-16:30', '17:00-19:30', '20:00-22:30'] },
     keepReview: true,
+    dayTimes: [0,1,2,3,4].map(() => ({ cls: ['14:00-16:30'], rev: ['19:30-22:00'] })).concat([5,6].map(() => ({ cls: ['14:00-16:30', '17:00-19:30'], rev: ['20:00-22:30'] }))),
     hoursPerSession: 2.5,
     courses: [],
     appts: [],
@@ -58,6 +60,7 @@ const isDs = s => /^\d{4}\/\d{2}\/\d{2}$/.test(s || '');
 
 // Normalise anything loaded or typed into a well-formed config
 function normalizePlan(p) {
+  const hadDayTimes = !!(p && Array.isArray(p.dayTimes) && p.dayTimes.length === 7);
   const b = blankPlan();
   p = Object.assign(b, p || {});
   p.exam = Object.assign(blankPlan().exam, p.exam || {});
@@ -69,6 +72,21 @@ function normalizePlan(p) {
     weekday: Array.from({ length: 8 }, (_, i) => okT((st.weekday || [])[i]) ? String(st.weekday[i]).replace(/\s/g, '') : (defT.weekday[i] || '')),
     weekend: Array.from({ length: 8 }, (_, i) => okT((st.weekend || [])[i]) ? String(st.weekend[i]).replace(/\s/g, '') : (defT.weekend[i] || '')),
   };
+  // Per-weekday class / review times. Older plans (slot counts + weekday/weekend times) convert:
+  // the first slots of a day are classes, the rest reviews.
+  const fixT = s => { s = String(s || '').replace(/\s/g, '').replace(/[–~]/, '-'); return okT(s) ? s : ''; };
+  if (!hadDayTimes) {
+    p.dayTimes = p.slots.map((s, i) => {
+      const c = s === 0 ? 0 : (p.keepReview && s > 1 ? s - 1 : s);
+      const list = i < 5 ? p.slotTimes.weekday : p.slotTimes.weekend;
+      return { cls: list.slice(0, c), rev: list.slice(c, s) };
+    });
+  }
+  p.dayTimes = Array.from({ length: 7 }, (_, i) => {
+    const d = p.dayTimes[i] || {};
+    return { cls: (d.cls || []).slice(0, 8).map(fixT), rev: (d.rev || []).slice(0, 8).map(fixT) };
+  });
+  p.slots = p.dayTimes.map(d => d.cls.length + d.rev.length);
   p.hoursPerSession = parseFloat(p.hoursPerSession) > 0 ? parseFloat(p.hoursPerSession) : 2.5;
   p.courses = (p.courses || []).map((c, i) => ({
     name: String(c.name || '').trim() || `科目${i + 1}`,
@@ -106,12 +124,20 @@ function apptColor(name) {
   if (/考試/.test(name)) return MARKER_COLORS.exam;
   return '#D29922';
 }
-// Time of the n-th study slot (0-based) on a day, from the plan's slot times
-function slotTime(ds, n) {
-  if (!PLAN || !PLAN.slotTimes) return null;
-  const list = wdOf(ds) < 5 ? PLAN.slotTimes.weekday : PLAN.slotTimes.weekend;
-  const m = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/.exec(list[n] || '');
-  const pad = t => t.padStart(5, '0');
+// Time of a planned class / review: classes take the day's class times in order, reviews take
+// the review times, then any class times left unused that day.
+function studySlotTime(ds, ev, study) {
+  if (!PLAN || !PLAN.dayTimes) return null;
+  const d = PLAN.dayTimes[wdOf(ds)];
+  const classes = study.filter(e => e.type === 'class'), reviews = study.filter(e => e.type === 'review');
+  let t = '';
+  if (ev.type === 'class') t = d.cls[classes.indexOf(ev)] || '';
+  else if (ev.type === 'review') {
+    const k = reviews.indexOf(ev);
+    t = k < d.rev.length ? d.rev[k] : (d.cls[classes.length + k - d.rev.length] || '');
+  }
+  const m = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/.exec(t || '');
+  const pad = x => x.padStart(5, '0');
   return m ? { start: pad(m[1]), end: pad(m[2]) } : null;
 }
 function examDateObj() { return PLAN && isDs(PLAN.exam.start) ? parseDate(PLAN.exam.start) : null; }
@@ -139,7 +165,7 @@ function buildSchedule(p, frozen) {
     if (m) done[e.course] = Math.max(done[e.course], +(m[2] || m[1]));
   }));
 
-  const classSlots = ds => { const s = p.slots[wdOf(ds)] || 0; return s === 0 ? 0 : (p.keepReview && s > 1 ? s - 1 : s); };
+  const classSlots = ds => (p.dayTimes[wdOf(ds)] || { cls: [] }).cls.length;
   const classesOn = {};               // ds -> [course names] in order
   const used = {};                    // ds -> class slots used
   const sessionRange = {};            // `${ds}|${course}` -> [a,b]
@@ -363,17 +389,9 @@ function renderSettings() {
   </div>
 
   <div class="ps-card" id="plan-sec-slots">
-    <h2 class="panel-title">每天可讀書的時段數</h2>
-    <div class="ps-slots">${WD_LABELS.map((w, i) => `<label><span>${w}</span><input class="todo-input field-input ps-num" type="number" min="0" max="8" value="${p.slots[i]}" data-path="slots.${i}" onchange="planSet(this);renderSettings()"></label>`).join('')}</div>
-    <label class="ps-check"><input type="checkbox" ${p.keepReview ? 'checked' : ''} data-path="keepReview" onchange="planSet(this)"> 有上課的日子至少保留 1 個時段複習</label>
-    <p class="ps-hint">每個時段排一堂課或一次複習。上完課剩下的時段會自動排複習。</p>
-    <div class="ps-times">
-      ${[['weekday', '平日（一～五）', Math.max(...p.slots.slice(0, 5), 1)], ['weekend', '假日（六、日）', Math.max(...p.slots.slice(5), 1)]].map(([k, label, n]) => `
-        <div class="ps-row"><span class="ps-lbl ps-times-lbl">${label}</span>
-          ${Array.from({ length: n }, (_, i) => `<span class="ps-slot-t"><span class="ps-hint">時段${i + 1}</span><input class="todo-input field-input ps-time" type="text" placeholder="例 14:00-16:30" value="${esc((p.slotTimes && p.slotTimes[k] && p.slotTimes[k][i]) || '')}" data-path="slotTimes.${k}.${i}" oninput="planSet(this)"></span>`).join('')}
-        </div>`).join('')}
-      <p class="ps-hint">每天的第 1 個時段先排上課，接著排複習。這些時間會顯示在月曆上，也用來和 Google 行事曆比對衝突。</p>
-    </div>
+    <h2 class="panel-title">每天的上課／複習時段</h2>
+    <p class="ps-hint" style="margin-top:-4px">每個時段排一堂課或一次複習。那天沒課時，空出的上課時段也會拿來複習。時段可以按「＋」加、「✕」刪；整天不讀書就把時段都刪掉。</p>
+    <div class="ps-days">${WD_LABELS.map((w, i) => dayTimesRow(p, w, i)).join('')}</div>
   </div>
 
   <div class="ps-card" id="plan-sec-courses">
@@ -445,6 +463,47 @@ function apptRow(a, i) {
   </div>`;
 }
 // Write one field from an input into the draft
+function dayTimesRow(p, w, i) {
+  const d = p.dayTimes[i];
+  const cell = (kind, list) => `<div class="ps-dt-cell"><span class="ps-dt-kind ps-dt-${kind}">${kind === 'cls' ? '上課' : '複習'}</span>
+    ${list.map((t, j) => { const [a, b] = (t || '-').split('-'); return `<span class="ps-dt-slot">
+      <input type="time" class="todo-input field-input ps-dt-time" value="${esc(a ? a.padStart(5, '0') : '')}" onchange="planDayTime(${i},'${kind}',${j},0,this.value)">
+      <span class="ps-dt-dash">–</span>
+      <input type="time" class="todo-input field-input ps-dt-time" value="${esc(b ? b.padStart(5, '0') : '')}" onchange="planDayTime(${i},'${kind}',${j},1,this.value)">
+      <button class="ps-dt-x" onclick="planDayRemove(${i},'${kind}',${j})" title="刪除這個時段">✕</button></span>`; }).join('')}
+    <button class="ps-dt-add" onclick="planDayAdd(${i},'${kind}')" title="新增時段">＋</button></div>`;
+  const copy = i === 0 ? `<button class="cancel-btn ps-dt-copy" onclick="planDayCopy(0,[1,2,3,4])">套用到週二～五</button>`
+             : i === 5 ? `<button class="cancel-btn ps-dt-copy" onclick="planDayCopy(5,[6])">套用到週日</button>` : '';
+  return `<div class="ps-dt-row${d.cls.length + d.rev.length ? '' : ' ps-dt-off'}">
+    <div class="ps-dt-day">週${w}${d.cls.length + d.rev.length ? '' : '<span class="ps-hint">不排</span>'}</div>
+    <div class="ps-dt-body">${cell('cls', d.cls)}${cell('rev', d.rev)}</div>${copy}</div>`;
+}
+function planDaySync() { planDraft.slots = planDraft.dayTimes.map(d => d.cls.length + d.rev.length); planJustSaved = false; }
+function planDayTime(i, kind, j, part, v) {
+  const parts = (planDraft.dayTimes[i][kind][j] || '-').split('-');
+  parts[part] = v || '';
+  planDraft.dayTimes[i][kind][j] = parts[0] && parts[1] ? parts.join('-') : parts.join('-').replace(/^-$/, '');
+  planDaySync(); updatePlanPreview();
+}
+function planDayAdd(i, kind) {
+  const list = planDraft.dayTimes[i][kind];
+  if (list.length >= 4) return;
+  const last = list[list.length - 1] || (kind === 'rev' ? planDraft.dayTimes[i].cls.slice(-1)[0] : '');
+  let next = last ? '' : (kind === 'cls' ? '14:00-16:30' : '19:30-22:00');
+  const m = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(last || '');
+  if (m) {   // start 30 min after the last one ends, same length
+    const toM = (h, mm) => +h * 60 + +mm, len = toM(m[3], m[4]) - toM(m[1], m[2]), s = toM(m[3], m[4]) + 30, e = s + Math.max(30, len);
+    const f = x => String(Math.floor(x / 60) % 24).padStart(2, '0') + ':' + String(x % 60).padStart(2, '0');
+    if (e <= 24 * 60) next = f(s) + '-' + f(e);
+  }
+  list.push(next);
+  planDaySync(); renderSettings();
+}
+function planDayRemove(i, kind, j) { planDraft.dayTimes[i][kind].splice(j, 1); planDaySync(); renderSettings(); }
+function planDayCopy(from, to) {
+  to.forEach(i => { planDraft.dayTimes[i] = clone(planDraft.dayTimes[from]); });
+  planDaySync(); renderSettings();
+}
 function planSet(el) {
   planJustSaved = false;
   const path = el.dataset.path.split('.');
