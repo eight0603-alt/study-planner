@@ -108,6 +108,7 @@ function normalizePlan(p) {
     first: isDs(a.first) ? a.first : '',
     time: String(a.time || '').trim(),
   }));
+  p.cancelled = (p.cancelled || []).filter(x => x && isDs(x.ds) && x.course).map(x => ({ ds: x.ds, course: String(x.course) }));
   return p;
 }
 function studyEnd(p) {
@@ -193,7 +194,9 @@ function buildSchedule(p, frozen) {
       if (inf) { if (!inf.first || ds < inf.first) inf.first = ds; if (!inf.last || ds > inf.last) inf.last = ds; }
     });
   });
-  const inRange = (c, ds) => (!c.start || ds >= c.start) && (!c.end || ds <= c.end);
+  // A cancelled class takes no slot and no session number, so later sessions move up
+  const cancelledSet = new Set((p.cancelled || []).map(x => x.ds + '|' + x.course));
+  const inRange = (c, ds) => (!c.start || ds >= c.start) && (!c.end || ds <= c.end) && !cancelledSet.has(ds + '|' + c.name);
 
   // 1) Weekly courses: each day, courses that meet that weekday; if too many, take turns
   const lastContest = {};
