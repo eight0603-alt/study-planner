@@ -587,7 +587,7 @@ function renderModalContent() {
   const completed=getCompleted(ds);  // stores composite keys "srcType-srcIdx"
   let html='';
 
-  window.restoreDefaultDay=function(d){storage('hidden-'+d,null);renderModalContent();if(typeof renderCalendar==='function')renderCalendar();}; if((storage('hidden-'+ds)||[]).length) html+='<button class="small-btn" style="margin-bottom:10px" onclick="restoreDefaultDay(\''+ds+'\')">↺ 還原這天的預設行程</button>'; if(!items.length) html+='<p class="empty-state">無排定行程，可在下方新增</p>';
+  window.restoreDefaultDay=function(d){try{const cf=storage('plan-config'); if(cf&&(cf.cancelled||[]).some(x=>x.ds===d)){cf.cancelled=cf.cancelled.filter(x=>x.ds!==d); savePlan(cf);}}catch(e){} storage('hidden-'+d,null);renderModalContent();if(typeof renderCalendar==='function')renderCalendar();}; if((storage('hidden-'+ds)||[]).length || ((storage('plan-config')||{}).cancelled||[]).some(x=>x.ds===ds)) html+='<button class="small-btn" style="margin-bottom:10px" onclick="restoreDefaultDay(\''+ds+'\')">↺ 還原這天的預設行程</button>'; if(!items.length) html+='<p class="empty-state">無排定行程，可在下方新增</p>';
 
   items.forEach(({ev,srcType,srcIdx},i)=>{
     const color=evColor(ev);
@@ -672,6 +672,15 @@ function removeCalendarItem(ds, srcType, srcIdx) {
   } else if(srcType==='moved'){
     const evs=getMovedEvents(ds); evs.splice(srcIdx,1); saveMovedEvents(ds,evs);
   } else if(srcType==='builtin'){
+    // A cancelled class frees its session number: later sessions of that course move up
+    const bev=(SCHEDULE_DATA.schedule[ds]||[])[srcIdx];
+    if(bev && bev.type==='class' && ds>=todayStr() && typeof savePlan==='function' && storage('plan-config')){
+      const cfg=JSON.parse(JSON.stringify(storage('plan-config')));
+      cfg.cancelled=(cfg.cancelled||[]).concat([{ds, course:bev.course}]);
+      savePlan(cfg);
+      try{ if(typeof renderCalendar==='function') renderCalendar(); }catch(e){}
+      return;
+    }
     // Hide this built-in event on this day
     const hidden=storage(`hidden-${ds}`)||[];
     if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
