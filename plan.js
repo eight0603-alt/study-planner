@@ -294,10 +294,36 @@ function addFixedEvents(p, out, frozen) {
   return out;
 }
 
+// A cancelled class (hidden, and not moved to another day) must not use up a session number:
+// later classes of that course move up by one. Moved classes keep their number.
+function renumberAfterCancels(schedule, p) {
+  if (typeof storage !== 'function' || typeof projectLocalKeys !== 'function') return;
+  const movedKeys = new Set();
+  projectLocalKeys().forEach(k => {
+    if (!/^moved-/.test(k || '')) return;
+    (storage(k) || []).forEach(e => movedKeys.add(e.course + '|' + e.label));
+  });
+  const per = {}, total = {}, n = {};
+  p.courses.forEach(c => { per[c.name] = c.per; total[c.name] = c.total; n[c.name] = 0; });
+  Object.keys(schedule).sort().forEach(ds => {
+    const hidden = storage('hidden-' + ds) || [];
+    schedule[ds].forEach((e, i) => {
+      if (e.type !== 'class' || !(e.course in n)) return;
+      if (hidden.includes(i) && !movedKeys.has(e.course + '|' + e.label)) return;   // cancelled: skipped
+      const a = n[e.course] + 1, b = Math.min(n[e.course] + per[e.course], total[e.course]);
+      n[e.course] = b;
+      e.label = a === b ? `第${a}堂` : `第${a}-${b}堂`;
+      e.progress = `${b}/${total[e.course]}`;
+      e.note = b === total[e.course] ? '最後一堂' : '';
+    });
+  });
+}
+
 function applyPlan(p) {
   PLAN = normalizePlan(p);
   const built = buildSchedule(PLAN, storage('plan-frozen') || {});
   PLAN_INFO = built.info;
+  try { renumberAfterCancels(built.schedule, PLAN); } catch (e) { console.error('renumber', e); }
   SCHEDULE_DATA = { schedule: built.schedule, courses: PLAN.courses.map(c => ({ name: c.name, total: c.total, color: c.color, sessions_done: 0 })) };
 }
 
