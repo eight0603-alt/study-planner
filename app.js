@@ -57,8 +57,14 @@ function allEventsOn(ds) {
 }
 // Time of an event: set via ⏱ / timeline, else parsed from a name like 瑜伽（9:30-11:30）
 function padTime(t){ const [h,m]=t.split(':'); return h.padStart(2,'0')+':'+m; }
+// A timed entry belongs to a course's class OR its review separately, so each can have its own time
+function sameTimeKind(t, course, type) {
+  if (t.course !== course) return false;
+  const study = x => x === 'class' || x === 'review';
+  return (study(t.type) && study(type)) ? t.type === type : true;
+}
 function eventTime(ds, ev) {
-  const t = getTimeEvents(ds).find(e => e.course === ev.course);
+  const t = getTimeEvents(ds).find(e => sameTimeKind(e, ev.course, ev.type));
   if (t) return {start:t.start, end:t.end};
   const m = /(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})/.exec(ev.course||'');
   if (m) return {start:padTime(m[1]), end:padTime(m[2])};
@@ -635,7 +641,7 @@ function toggleModalDoneAll(ds, doneKey) {
 // Set time for any event (built-in, custom, moved)
 function setTimeForEvent(ds, courseName, courseType) {
   const tevs = getTimeEvents(ds);
-  const existIdx = tevs.findIndex(e => e.course === courseName);
+  const existIdx = tevs.findIndex(e => sameTimeKind(e, courseName, courseType));
   editingTevIdx = existIdx >= 0 ? existIdx : null;
   document.getElementById('timeModalTitle').textContent = existIdx >= 0 ? '修改時間' : '設定時間';
   document.getElementById('tevcourse').value = courseName;
