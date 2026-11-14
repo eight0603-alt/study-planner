@@ -227,7 +227,11 @@ function migrateCalendarDoneToBullets() {
 // ── Progress from the daily page: only bullets marked ✓ 完成 count ──
 // Which schedule event a daily bullet stands for (stored ref, or matched from its text for older bullets)
 function bulletEventRef(ds, b) {
-  if (b.ref) return b.ref;
+  if (b.ref) {
+    // use the event's current label, so renumbering after a cancelled class is reflected
+    if (b.ref.type === 'class') { const hit = allEventsOn(ds).find(x => x.ev.type === 'class' && x.ev.course === b.ref.course); if (hit && hit.ev.label) return {course: b.ref.course, type: 'class', label: hit.ev.label}; }
+    return b.ref;
+  }
   for (const {ev} of allEventsOn(ds)) {
     if (ev.type!=='class' && ev.type!=='review') continue;
     const hasLabel = ev.label && ev.label!=='—';
