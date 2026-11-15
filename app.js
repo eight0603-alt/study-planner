@@ -229,7 +229,7 @@ function migrateCalendarDoneToBullets() {
 function bulletEventRef(ds, b) {
   if (b.ref) {
     // use the event's current label, so renumbering after a cancelled class is reflected
-    if (b.ref.type === 'class') { const hit = allEventsOn(ds).find(x => x.ev.type === 'class' && x.ev.course === b.ref.course); if (hit && hit.ev.label) return {course: b.ref.course, type: 'class', label: hit.ev.label}; }
+    if (b.ref.type === 'class') { const hit = allEventsOn(ds).find(x => x.ev.type === 'class' && x.ev.course === b.ref.course); if (hit && hit.ev.label) return {course: b.ref.course, type: 'class', label: evLabel(ds, hit.ev)}; }
     return b.ref;
   }
   for (const {ev} of allEventsOn(ds)) {
@@ -701,45 +701,67 @@ function deleteModalEvent(ds, srcType, srcIdx) {
   }
   removeCalendarItem(ds, srcType, srcIdx);
   try { reconcileDayBullets(ds); } catch(e) {}
+  renumberNow();
   renderModalContent();
   const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
   if(cont) buildCalDayEvents(cont,ds);
 }
 
-function editModalEvent(ds, srcType, srcIdx) {
-  const items=allEventsOn(ds);
-  // find the item matching srcType+srcIdx
-  const match=items.find(x=>x.srcType===srcType && x.srcIdx===srcIdx);
-  if(!match) return;
-  const newName=prompt('課程名稱：', match.ev.course);
-  if(newName===null) return;  // cancelled
-  const newLabel=prompt('備註：', match.ev.label||'');
-  if(newLabel===null) return;
-
-  if(srcType==='custom'){
-    const evs=getCustomEvents(ds);
-    evs[srcIdx].course=newName.trim()||evs[srcIdx].course;
-    evs[srcIdx].label=newLabel;
-    saveCustomEvents(ds,evs);
-  } else if(srcType==='moved'){
-    const evs=getMovedEvents(ds);
-    evs[srcIdx].course=newName.trim()||evs[srcIdx].course;
-    evs[srcIdx].label=newLabel;
-    saveMovedEvents(ds,evs);
-  } else if(srcType==='builtin'){
-    // For built-in: hide original and create a custom copy with edits
-    const hidden=storage(`hidden-${ds}`)||[];
-    if(!hidden.includes(srcIdx)) hidden.push(srcIdx);
-    storage(`hidden-${ds}`,hidden);
-    const orig=match.ev;
-    const customs=getCustomEvents(ds);
-    customs.push({course:newName.trim()||orig.course, type:orig.type,
-                  label:newLabel, progress:orig.progress||''});
-    saveCustomEvents(ds,customs);
+function renumberNow() {
+  try { if (typeof renderCalendar === 'function') renderCalendar(); } catch (e) {}
+}
+let evEditCtx = null;
+function editModalEvent(ds, srcType, srcIdx) { openEvEdit(ds, srcType, srcIdx); }
+function openEvEdit(ds, srcType, srcIdx) {
+  const m = allEventsOn(ds).find(x => x.srcType === srcType && x.srcIdx === srcIdx); if (!m) return;
+  const ev = m.ev, t = eventTime(ds, ev) || {start: '', end: ''};
+  const g = id => document.getElementById(id);
+  g('eeName').value = ev.course;
+  g('eeType').value = ['class','review','appt'].includes(ev.type) ? ev.type : 'appt';
+  g('eeStart').value = t.start || ''; g('eeEnd').value = t.end || '';
+  const lab = evLabel(ds, ev) || '';
+  const sn = /第(\d+)(?:-(\d+))?堂/.exec(lab);
+  const sessTxt = sn ? (sn[2] ? sn[1] + '-' + sn[2] : sn[1]) : '';
+  g('eeSess').value = sessTxt;
+  evEditCtx = {ds, srcType, srcIdx, orig: JSON.parse(JSON.stringify(ev)), sessTxt};
+  g('eeNote').value = (lab && lab !== '—' && !sn && !/^\d{1,2}:\d{2}\s*[–-]/.test(lab) && !/^第\d+次複習$/.test(lab)) ? lab : '';
+  g('evEditModal').classList.add('open');
+}
+function closeEvEdit() { document.getElementById('evEditModal').classList.remove('open'); evEditCtx = null; }
+function saveEvEdit() {
+  const c = evEditCtx; if (!c) return;
+  const {ds, srcType, srcIdx, orig} = c, g = id => document.getElementById(id).value.trim();
+  const name = g('eeName'), type = g('eeType'), start = g('eeStart'), end = g('eeEnd'), sess = g('eeSess').replace(/\s/g, ''), note = g('eeNote');
+  if (!name) { alert('請輸入名稱'); return; }
+  if ((start || end) && (!start || !end || start >= end)) { alert('請填完整的開始與結束時間，且結束要晚於開始'); return; }
+  let label, progress;
+  if (type === 'class' && sess && sess !== c.sessTxt) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(sess); if (!m) { alert('堂數請填數字，例如 3 或 3-4'); return; }
+    const a = +m[1], b = m[2] ? +m[2] : a, tot = (SCHEDULE_DATA.courses.find(x => x.name === name) || {}).total;
+    label = a === b ? `第${a}堂` : `第${a}-${b}堂`; progress = tot ? `${b}/${tot}` : '';
+  } else {
+    label = note || (type === orig.type ? (orig.label || '') : ''); progress = type === orig.type ? (orig.progress || '') : '';
   }
-  renderModalContent();
-  const cont=document.querySelector(`.ev-container[data-ds="${ds}"]`);
-  if(cont) buildCalDayEvents(cont,ds);
+  const changed = name !== orig.course || type !== orig.type || label !== (orig.label || '') || progress !== (orig.progress || '');
+  if (changed) {
+    const patch = {course: name, type, label, progress};
+    if (srcType === 'custom') { const evs = getCustomEvents(ds); Object.assign(evs[srcIdx], patch); saveCustomEvents(ds, evs); }
+    else if (srcType === 'moved') { const evs = getMovedEvents(ds); Object.assign(evs[srcIdx], patch); saveMovedEvents(ds, evs); }
+    else {
+      const hidden = storage(`hidden-${ds}`) || []; if (!hidden.includes(srcIdx)) hidden.push(srcIdx); storage(`hidden-${ds}`, hidden);
+      const customs = getCustomEvents(ds); customs.push(Object.assign({custom: true}, patch)); saveCustomEvents(ds, customs);
+    }
+  }
+  // time: replace this item's timed entry (blank times = back to the default slot time)
+  let tevs = getTimeEvents(ds).filter(e => !sameTimeKind(e, orig.course, orig.type));
+  if (start && end) { tevs.push({course: name, start, end, type, note: ''}); tevs.sort((x, y) => x.start.localeCompare(y.start)); }
+  saveTimeEvents(ds, tevs);
+  try { reconcileDayBullets(ds); } catch (e) {}
+  closeEvEdit();
+  if (changed) renumberNow();
+  if (modalDate && document.getElementById('dayModal').classList.contains('open')) renderModalContent();
+  const cont = document.querySelector(`.ev-container[data-ds="${ds}"]`); if (cont) buildCalDayEvents(cont, ds);
+  if (ds === dailyDate) { try { renderTimeline(); renderBullets(); } catch (e) {} }
 }
 
 function closeDayModal(e) {
@@ -920,14 +942,13 @@ function renderTimeline() {
   });
 
   // Calendar events that have a time (study slots, 瑜伽（9:30-11:30）…) but no manual entry
-  const scheduledCourses = new Set(tevs.map(e=>e.course));
-  const rest = allEventsOn(dailyDate).filter(({ev})=>!scheduledCourses.has(ev.course));
-  rest.forEach(({ev})=>{
+  const rest = allEventsOn(dailyDate).filter(({ev})=>!tevs.some(t=>sameTimeKind(t, ev.course, ev.type)));
+  rest.forEach(({ev,srcType,srcIdx})=>{
     const t = eventTime(dailyDate, ev); if (!t) return;
     const color = evColor(ev);
     const top = minutesToPx(timeToMinutes(t.start));
     const height = Math.max(24, minutesToPx(timeToMinutes(t.end)) - top);
-    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44">
+    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44;cursor:pointer" title="點擊編輯" onclick="openEvEdit(${jsAttr(dailyDate)},${jsAttr(srcType)},${srcIdx})">
       <div class="tl-event-name">${escH(ev.course)}${evLabel(dailyDate, ev) && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(evLabel(dailyDate, ev))+'</span>' : ''}</div>
       <div class="tl-event-time">${t.start}–${t.end}</div>
     </div>`;
