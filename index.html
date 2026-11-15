@@ -260,6 +260,30 @@
 
 </main>
 
+<!-- Edit event modal -->
+<div id="evEditModal" class="modal-overlay" onclick="if(event.target===this)closeEvEdit()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeEvEdit()">✕</button>
+    <h2 class="modal-title">編輯行程</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+      <div><label class="field-label">名稱</label><input id="eeName" class="todo-input field-input" type="text" list="courseNameList"></div>
+      <div><label class="field-label">類型</label>
+        <select id="eeType" class="ev-type-select" style="width:100%"><option value="class">上課</option><option value="review">複習</option><option value="appt">行程</option></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="field-label">開始時間</label><input id="eeStart" class="todo-input field-input" type="time"></div>
+        <div><label class="field-label">結束時間</label><input id="eeEnd" class="todo-input field-input" type="time"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-2);margin-top:-6px">時間留空 = 使用預設時段</div>
+      <div><label class="field-label">第幾堂（上課才需要，例 3 或 3-4，選填）</label><input id="eeSess" class="todo-input field-input" type="text" placeholder="例：3"></div>
+      <div><label class="field-label">備註（選填）</label><input id="eeNote" class="todo-input field-input" type="text"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="cancel-btn" onclick="closeEvEdit()">取消</button>
+        <button class="small-btn" style="padding:6px 18px" onclick="saveEvEdit()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Day Detail Modal -->
 <div id="dayModal" class="modal-overlay" onclick="closeDayModal(event)">
   <div class="modal">
@@ -369,8 +393,8 @@
 
 <script src="sync.js?v=5"></script>
 <script src="projects.js?v=4"></script>
-<script src="plan.js?v=8"></script>
+<script src="plan.js?v=9"></script>
 <script src="gcal.js?v=3"></script>
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>
