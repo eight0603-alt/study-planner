@@ -309,7 +309,8 @@ function renumberAfterCancels(schedule, p) {
     const hidden = storage('hidden-' + ds) || [];
     schedule[ds].forEach((e, i) => {
       if (e.type !== 'class' || !(e.course in n)) return;
-      if (hidden.includes(i) && !movedKeys.has(e.course + '|' + e.label)) return;   // cancelled: skipped
+      if (e._l0 === undefined) e._l0 = e.label;                                     // original label, kept for re-runs
+      if (hidden.includes(i) && !movedKeys.has(e.course + '|' + e._l0)) return;     // cancelled: skipped
       const a = n[e.course] + 1, b = Math.min(n[e.course] + per[e.course], total[e.course]);
       n[e.course] = b;
       e.label = a === b ? `第${a}堂` : `第${a}-${b}堂`;
