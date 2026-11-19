@@ -63,7 +63,29 @@ function sameTimeKind(t, course, type) {
   const study = x => x === 'class' || x === 'review';
   return (study(t.type) && study(type)) ? t.type === type : true;
 }
+// Each item can carry its own time: custom / moved items in ev.tm, planned items in btime-<day>
+const TM_RE = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/;
+function ownTime(ds, ev) {
+  let tm = ev.tm;
+  if (!tm) { const i = (SCHEDULE_DATA.schedule[ds] || []).indexOf(ev); if (i >= 0) tm = (storage(`btime-${ds}`) || {})[i]; }
+  const m = TM_RE.exec(tm || '');
+  return m ? {start: padTime(m[1]), end: padTime(m[2])} : null;
+}
+function setOwnTime(ds, srcType, srcIdx, start, end) {
+  const tm = start && end ? `${start}-${end}` : '';
+  if (srcType === 'builtin') {
+    const bt = storage(`btime-${ds}`) || {};
+    if (tm) bt[srcIdx] = tm; else delete bt[srcIdx];
+    storage(`btime-${ds}`, Object.keys(bt).length ? bt : null);
+  } else {
+    const get = srcType === 'custom' ? getCustomEvents : getMovedEvents, put = srcType === 'custom' ? saveCustomEvents : saveMovedEvents;
+    const evs = get(ds); if (!evs[srcIdx]) return;
+    if (tm) evs[srcIdx].tm = tm; else delete evs[srcIdx].tm;
+    put(ds, evs);
+  }
+}
 function eventTime(ds, ev) {
+  const own = ownTime(ds, ev); if (own) return own;
   const t = getTimeEvents(ds).find(e => sameTimeKind(e, ev.course, ev.type));
   if (t) return {start:t.start, end:t.end};
   const m = /(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})/.exec(ev.course||'');
@@ -97,10 +119,13 @@ function labelMap() {
   [...days].sort().forEach(ds => {
     allEventsOn(ds).forEach(({ ev }) => {
       const c = ev.course;
-      if (ev.type === 'class' && LBL_CLASS.test(ev.label || '')) {
-        const n = sessionNumbers(ev.label).length || 1, s = (cls[c] || 0) + 1, e = s + n - 1;
+      const L = ev.label || '', pat = LBL_CLASS.test(L);
+      if (ev.type === 'class' && (pat || totals[c])) {
+        // added by hand (no number, or a time / note as label) counts as one session
+        const n = pat ? (sessionNumbers(L).length || 1) : 1, s = (cls[c] || 0) + 1, e = s + n - 1;
         cls[c] = e;
-        map.set(lblKey(ds, ev), { label: n > 1 ? `第${s}-${e}堂` : `第${s}堂`, progress: totals[c] ? `${e}/${totals[c]}` : null });
+        const note = !pat && L && L !== '—' && !/^\d{1,2}:\d{2}\s*[–-]/.test(L) ? '・' + L : '';
+        map.set(lblKey(ds, ev), { label: (n > 1 ? `第${s}-${e}堂` : `第${s}堂`) + note, progress: totals[c] ? `${e}/${totals[c]}` : null });
       } else if (ev.type === 'review' && LBL_REVIEW.test(ev.label || '')) {
         rv[c] = (rv[c] || 0) + 1;
         map.set(lblKey(ds, ev), { label: `第${rv[c]}次複習`, progress: null });
@@ -113,7 +138,7 @@ function labelMap() {
 function evLabel(ds, ev) { const x = labelMap().get(lblKey(ds, ev)); return x ? x.label : (ev.label || ''); }
 function evProgress(ds, ev) {
   const x = labelMap().get(lblKey(ds, ev));
-  return x && x.progress && LBL_PROG.test(ev.progress || '') ? x.progress : (ev.progress || '');
+  return x && x.progress && (!ev.progress || LBL_PROG.test(ev.progress)) ? x.progress : (ev.progress || '');
 }
 
 // Legacy compat
@@ -229,7 +254,10 @@ function migrateCalendarDoneToBullets() {
 function bulletEventRef(ds, b) {
   if (b.ref) {
     // use the event's current label, so renumbering after a cancelled class is reflected
-    if (b.ref.type === 'class') { const hit = allEventsOn(ds).find(x => x.ev.type === 'class' && x.ev.course === b.ref.course); if (hit && hit.ev.label) return {course: b.ref.course, type: 'class', label: evLabel(ds, hit.ev)}; }
+    if (b.ref.type === 'class') {
+      const all = allEventsOn(ds), hit = all.find(x => bulletMatchesEvent(b, x.ev)) || all.find(x => x.ev.type === 'class' && x.ev.course === b.ref.course);
+      if (hit) { const lb = evLabel(ds, hit.ev); if (lb) return {course: b.ref.course, type: 'class', label: lb}; }
+    }
     return b.ref;
   }
   for (const {ev} of allEventsOn(ds)) {
@@ -259,7 +287,10 @@ function computeProgress() {
       if(b.status!=='done') return;
       const ref=bulletEventRef(ds,b);
       if(!ref) return;
-      if(ref.type==='class' && sessions[ref.course]) sessionNumbers(ref.label).forEach(n=>sessions[ref.course].add(n));
+      if(ref.type==='class' && sessions[ref.course]){
+        let nums=sessionNumbers(evLabel(ds, ref)); if(!nums.length) nums=sessionNumbers(ref.label);
+        nums.forEach(n=>sessions[ref.course].add(n));
+      }
       if(ref.type==='review') reviews.add(ds+'|'+ref.course);
     });
   }
@@ -618,7 +649,7 @@ function renderModalContent() {
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="ev-action-btn" onclick="setTimeForEvent(${jsAttr(ds)},${jsAttr(ev.course)},${jsAttr(ev.type)})" title="設定時間">⏱</button>
+        <button class="ev-action-btn" onclick="openEvEdit(${jsAttr(ds)},${jsAttr(srcType)},${srcIdx})" title="設定時間">⏱</button>
         <button class="ev-action-btn" onclick="editModalEvent('${ds}','${srcType}',${srcIdx})" title="編輯">✎</button>
         <button class="ev-action-btn" onclick="toggleModalDoneAll('${ds}','${doneKey}')" title="${done?'取消完成':'標記完成'}">${done?'↩':'✓'}</button>
         <button class="ev-action-btn ev-del-btn" onclick="deleteModalEvent('${ds}','${srcType}',${srcIdx})" title="刪除">✕</button>
@@ -743,6 +774,7 @@ function saveEvEdit() {
     label = note || (type === orig.type ? (orig.label || '') : ''); progress = type === orig.type ? (orig.progress || '') : '';
   }
   const changed = name !== orig.course || type !== orig.type || label !== (orig.label || '') || progress !== (orig.progress || '');
+  const bl0 = getBullets(ds), bi = bl0.findIndex(b => b.status !== 'scheduled' && bulletMatchesEvent(b, orig));
   if (changed) {
     const patch = {course: name, type, label, progress};
     if (srcType === 'custom') { const evs = getCustomEvents(ds); Object.assign(evs[srcIdx], patch); saveCustomEvents(ds, evs); }
@@ -752,10 +784,26 @@ function saveEvEdit() {
       const customs = getCustomEvents(ds); customs.push(Object.assign({custom: true}, patch)); saveCustomEvents(ds, customs);
     }
   }
-  // time: replace this item's timed entry (blank times = back to the default slot time)
-  let tevs = getTimeEvents(ds).filter(e => !sameTimeKind(e, orig.course, orig.type));
-  if (start && end) { tevs.push({course: name, start, end, type, note: ''}); tevs.sort((x, y) => x.start.localeCompare(y.start)); }
-  saveTimeEvents(ds, tevs);
+  // time belongs to this item only (blank = back to the default slot time).
+  // An older shared time for the course is handed to the other items that used it, then dropped.
+  const shared = getTimeEvents(ds).filter(e => sameTimeKind(e, orig.course, orig.type));
+  if (shared.length) {
+    const s0 = shared[0];
+    allEventsOn(ds).forEach(x => {
+      if (x.srcType === srcType && x.srcIdx === srcIdx) return;
+      if (sameTimeKind(s0, x.ev.course, x.ev.type) && !ownTime(ds, x.ev)) setOwnTime(ds, x.srcType, x.srcIdx, s0.start, s0.end);
+    });
+    saveTimeEvents(ds, getTimeEvents(ds).filter(e => !sameTimeKind(e, orig.course, orig.type)));
+  }
+  let tgtType = srcType, tgtIdx = srcIdx;
+  if (changed && srcType === 'builtin') { tgtType = 'custom'; tgtIdx = getCustomEvents(ds).length - 1; setOwnTime(ds, 'builtin', srcIdx, '', ''); }
+  setOwnTime(ds, tgtType, tgtIdx, start, end);
+  // the daily list follows the edit: same bullet, new name / number / time, status kept
+  if (bi >= 0) {
+    const nev = allEventsOn(ds).map(x => x.ev).find(e => e.course === name && e.type === type && (e.label || '') === (changed ? label : (orig.label || '')));
+    const bl = getBullets(ds);
+    if (nev && bl[bi]) { bl[bi].ref = {course: nev.course, type: nev.type, label: nev.label || ''}; bl[bi].text = eventBulletText(ds, nev); saveBullets(ds, bl); }
+  }
   try { reconcileDayBullets(ds); } catch (e) {}
   closeEvEdit();
   if (changed) renumberNow();
@@ -942,7 +990,7 @@ function renderTimeline() {
   });
 
   // Calendar events that have a time (study slots, 瑜伽（9:30-11:30）…) but no manual entry
-  const rest = allEventsOn(dailyDate).filter(({ev})=>!tevs.some(t=>sameTimeKind(t, ev.course, ev.type)));
+  const rest = allEventsOn(dailyDate).filter(({ev})=>ownTime(dailyDate, ev) || !tevs.some(t=>sameTimeKind(t, ev.course, ev.type)));
   rest.forEach(({ev,srcType,srcIdx})=>{
     const t = eventTime(dailyDate, ev); if (!t) return;
     const color = evColor(ev);
@@ -1271,7 +1319,7 @@ function reconcileDayBullets(ds){
     if(i<0){ missing.push({ev, isDone:done.includes(`${srcType}-${srcIdx}`)}); return; }
     used.add(i);
     const b=bullets[i], base=eventBulletText(ds,ev);
-    const autoText = t => { const s=stripBulletTime(t); return s===stripBulletTime(base) || (s.startsWith(ev.course+'　') && /^第[\d-]+(?:堂|次複習)$/.test(s.slice(ev.course.length+1))); };
+    const autoText = t => { const s=stripBulletTime(t); return s===stripBulletTime(base) || s===ev.course || (s.startsWith(ev.course+'　') && /^第[\d-]+(?:堂|次複習)$/.test(s.slice(ev.course.length+1))); };
     if(b.ref && autoText(b.text) && b.text!==base){ b.text=base; changed=true; }
   });
   const keep=bullets.filter((b,j)=>{
