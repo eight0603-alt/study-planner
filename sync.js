@@ -101,6 +101,19 @@ function syncApplyRemote(docs) {
   syncSaveMeta(meta);
   return changed;
 }
+// Reload when cloud data changed; give up (and say why) if the page keeps reloading in a loop
+function syncReload(why) {
+  try {
+    const now = Date.now(), log = JSON.parse(sessionStorage.getItem('sp-rl') || '[]').filter(x => now - x.t < 60000);
+    if (log.length >= 3) {
+      console.error('sync reload suppressed', log, why);
+      if (!sessionStorage.getItem('sp-rl-told')) { sessionStorage.setItem('sp-rl-told', '1'); alert('偵測到頁面一直重新整理，已暫停自動刷新。\n原因（請截圖給 Claude）：\n' + [...log.map(x => x.w), why].join('\n')); }
+      return;
+    }
+    log.push({t: now, w: why}); sessionStorage.setItem('sp-rl', JSON.stringify(log));
+  } catch (e) {}
+  location.reload();
+}
 function syncOnSnapshot(snap) {
   const docs = [];
   if (!syncInitialDone) snap.forEach(doc => docs.push(doc.data()));
@@ -129,13 +142,13 @@ function syncOnSnapshot(snap) {
       if (!(k in remote) || meta[k] > remote[k]) syncPending.add(k);
     });
     if (syncPending.size) syncScheduleFlush(); else setSyncState('synced');
-    if (changed.length || mode === 'cloud') { setTimeout(() => location.reload(), syncPending.size ? 1500 : 0); }
+    if (changed.length || mode === 'cloud') { setTimeout(() => syncReload('init:' + changed.join(',')), syncPending.size ? 1500 : 0); }
     return;
   }
   const changed = syncApplyRemote(docs);
   if (!changed.length) return;
   // Something changed on another device while this page is open
-  if (changed.some(k => /(^|:)plan-config$|^sp-projects$|(^|:)plan-frozen$/.test(k))) { location.reload(); return; }
+  if (changed.some(k => /(^|:)plan-config$|^sp-projects$|(^|:)plan-frozen$/.test(k))) { syncReload('remote:' + changed.join(',')); return; }
   try {
     renderProjectSwitcher(); renderCountdown();
     const v = document.querySelector('.view.active');
