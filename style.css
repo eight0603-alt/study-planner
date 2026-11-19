@@ -1042,3 +1042,13 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
   .ps-dt-day { width: 100%; flex-direction: row; gap: 8px; }
   .ps-dt-time { width: 96px !important; }
 }
+
+/* Timeline drag (move / resize / add) */
+.tl-drag { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tl-drag.tl-dragging { cursor: grabbing; opacity: .9; z-index: 20; box-shadow: 0 4px 14px rgba(0,0,0,.35); transition: none; }
+.tl-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
+.tl-resize::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 18px; height: 2px; margin-left: -9px; border-radius: 1px; background: currentColor; opacity: 0; }
+.tl-drag:hover .tl-resize::after { opacity: .5; }
+.tl-drag-in { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tl-col { cursor: crosshair; }
+.tl-new { background: rgba(88,166,255,.18); border: 1px dashed var(--accent); color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 10px; pointer-events: none; }

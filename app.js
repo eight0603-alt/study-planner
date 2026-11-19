@@ -67,6 +67,7 @@ function sameTimeKind(t, course, type) {
 const TM_RE = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/;
 function ownTime(ds, ev) {
   let tm = ev.tm;
+  if (!tm && ev.custom) { const m = /^(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})$/.exec(ev.label || ''); if (m) tm = m[1] + '-' + m[2]; }
   if (!tm) { const i = (SCHEDULE_DATA.schedule[ds] || []).indexOf(ev); if (i >= 0) tm = (storage(`btime-${ds}`) || {})[i]; }
   const m = TM_RE.exec(tm || '');
   return m ? {start: padTime(m[1]), end: padTime(m[2])} : null;
@@ -83,6 +84,31 @@ function setOwnTime(ds, srcType, srcIdx, start, end) {
     if (tm) evs[srcIdx].tm = tm; else delete evs[srcIdx].tm;
     put(ds, evs);
   }
+}
+// Old data kept times in a per-day list matched by name, so two items with the same name
+// shared one time. Hand each listed time to the items it applied to; entries with no item
+// become items of their own. Safe to run again.
+function migrateLegacyTimes(ds) {
+  const tevs = getTimeEvents(ds); if (!tevs.length) return false;
+  const used = new Set();
+  tevs.forEach(t => {
+    const hits = allEventsOn(ds).filter(x => sameTimeKind(t, x.ev.course, x.ev.type) && !used.has(x.srcType + x.srcIdx));
+    const free = hits.filter(x => !ownTime(ds, x.ev));
+    // a hand-added item whose label is this exact time belongs to this entry
+    const exact = hits.find(x => { const o = ownTime(ds, x.ev); return o && o.start === padTime(t.start) && o.end === padTime(t.end); });
+    if (exact) { used.add(exact.srcType + exact.srcIdx); return; }
+    if (free.length) { free.forEach(x => { setOwnTime(ds, x.srcType, x.srcIdx, t.start, t.end); used.add(x.srcType + x.srcIdx); }); return; }
+    const cs = getCustomEvents(ds);
+    cs.push({course: t.course, type: t.type || 'appt', label: t.note || '', progress: '', custom: true, tm: `${t.start}-${t.end}`});
+    saveCustomEvents(ds, cs); used.add('custom' + (cs.length - 1));
+  });
+  saveTimeEvents(ds, []);
+  return true;
+}
+function migrateAllLegacyTimes() {
+  let n = 0;
+  try { projectLocalKeys().forEach(k => { const m = /^tevents-(\d{4}\/\d{2}\/\d{2})$/.exec(k); if (m && migrateLegacyTimes(m[1])) n++; }); } catch (e) { console.error(e); }
+  return n;
 }
 function eventTime(ds, ev) {
   const own = ownTime(ds, ev); if (own) return own;
@@ -136,7 +162,8 @@ function labelMap() {
   _lblCache = map; _lblVer = storageVer; _lblSched = SCHEDULE_DATA.schedule;
   return map;
 }
-function evLabel(ds, ev) { const x = labelMap().get(lblKey(ds, ev)); return x ? x.label : (ev.label || ''); }
+const TIME_LABEL = /^\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}$/;   // old items kept their time as a label
+function evLabel(ds, ev) { const x = labelMap().get(lblKey(ds, ev)); return x ? x.label : (TIME_LABEL.test(ev.label || '') ? '' : (ev.label || '')); }
 function evProgress(ds, ev) {
   const x = labelMap().get(lblKey(ds, ev));
   return x && x.progress && (!ev.progress || LBL_PROG.test(ev.progress)) ? x.progress : (ev.progress || '');
@@ -845,17 +872,13 @@ function submitAddEvent(){
   if(!name){alert('請輸入行程名稱');return;}
 
   // Save to custom events (shows on calendar)
+  if((start||end) && !(start && end && start < end)){alert('請填完整的開始與結束時間，且結束要晚於開始');return;}
   const evs=getCustomEvents(modalDate);
-  evs.push({course:name, type, label:start&&end?`${start}–${end}`:note, progress:'', custom:true});
+  const nev={course:name, type, label:note, progress:'', custom:true};
+  if(start && end) nev.tm=`${start}-${end}`;
+  evs.push(nev);
   saveCustomEvents(modalDate,evs);
-
-  // If times provided, also save as time event (shows on daily timeline)
-  if(start && end && start < end){
-    const tevs=getTimeEvents(modalDate);
-    tevs.push({course:name, type, start, end, note});
-    tevs.sort((a,b)=>a.start.localeCompare(b.start));
-    saveTimeEvents(modalDate,tevs);
-  }
+  try{ reconcileDayBullets(modalDate); }catch(e){}
 
   document.getElementById('newEvName').value='';
   document.getElementById('newEvNote').value='';
@@ -922,15 +945,16 @@ function submitTimeEvent() {
   if (start >= end) { alert('結束時間必須晚於開始時間'); return; }
   // Use modalDate if set (called from calendar modal), else dailyDate
   const targetDs = modalDate || dailyDate;
-  const evs = getTimeEvents(targetDs);
-  const ev = {course, start, end, type, note};
-  if (editingTevIdx !== null) {
-    evs[editingTevIdx] = ev;
-  } else {
-    evs.push(ev);
+  if (editingTevIdx !== null) {          // old-style entry being edited
+    const evs = getTimeEvents(targetDs);
+    evs[editingTevIdx] = {course, start, end, type, note};
+    saveTimeEvents(targetDs, evs); migrateLegacyTimes(targetDs);
+  } else {                               // a new item with its own time (shows on both calendars)
+    const cs = getCustomEvents(targetDs);
+    cs.push({course, type, label: note, progress: '', custom: true, tm: `${start}-${end}`});
+    saveCustomEvents(targetDs, cs);
   }
-  evs.sort((a,b) => a.start.localeCompare(b.start));
-  saveTimeEvents(targetDs, evs); if(editingTevIdx===null && !allEventsOn(targetDs).some(x=>x.ev.course===course)){ const cs=getCustomEvents(targetDs); cs.push({course, type, label:start+'–'+end, progress:'', custom:true}); saveCustomEvents(targetDs,cs); try{reconcileDayBullets(targetDs);}catch(e){} }
+  try { reconcileDayBullets(targetDs); } catch(e) {}
   document.getElementById('timeEventModal').classList.remove('open');
   // Refresh timeline if on daily view
   if (targetDs === dailyDate) { renderTimeline(); try{renderBullets();}catch(e){} } try{ const c2=document.querySelector('.ev-container[data-ds="'+targetDs+'"]'); if(c2) buildCalDayEvents(c2,targetDs); }catch(e){}
@@ -945,6 +969,104 @@ function deleteTimeEvent(idx) {
   const gone=evs[idx]; evs.splice(idx,1); if(gone){ const cs=getCustomEvents(dailyDate), ci=cs.findIndex(c=>c.course===gone.course&&c.label===gone.start+'–'+gone.end); if(ci>=0){ const bl=getBullets(dailyDate), bi=bl.findIndex(b=>b.status!=='scheduled'&&b.ref&&b.ref.course===gone.course); if(bi>=0){bl.splice(bi,1);saveBullets(dailyDate,bl);} cs.splice(ci,1); saveCustomEvents(dailyDate,cs); } }
   saveTimeEvents(dailyDate, evs);
   renderTimeline();
+}
+
+// ── Timeline drag (like Outlook): move, resize, drag in from "未設定時間", drag on empty space to add ──
+const TL_SNAP = 15;   // minutes
+let tlDrag = null;
+const pxToMin = px => TL_START_H * 60 + px / TL_PX_PER_H * 60;
+const minToHM = m => { m = Math.max(0, Math.min(24 * 60, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const snapMin = m => Math.round(m / TL_SNAP) * TL_SNAP;
+function tlBindDrag(tl) {
+  if (tl._dragBound) return;
+  tl._dragBound = true;
+  tl.addEventListener('pointerdown', tlPointerDown);
+}
+function tlColY(col, clientY) { return clientY - col.getBoundingClientRect().top; }
+function tlPointerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  const tl = e.currentTarget, col = tl.querySelector('.tl-col'); if (!col) return;
+  const blk = e.target.closest('.tl-drag'), inBlk = e.target.closest('.tl-drag-in');
+  if (blk) {
+    e.preventDefault();
+    tlDrag = {mode: e.target.classList.contains('tl-resize') ? 'resize' : 'move', el: blk, col, y0: e.clientY,
+              top0: parseFloat(blk.style.top), h0: parseFloat(blk.style.height), moved: false,
+              st: blk.dataset.st, si: +blk.dataset.si};
+  } else if (inBlk) {
+    e.preventDefault();
+    const ghost = inBlk.cloneNode(true); ghost.classList.add('tl-ghost');
+    ghost.style.cssText += `;position:fixed;left:${inBlk.getBoundingClientRect().left}px;top:${e.clientY - 14}px;width:${inBlk.offsetWidth}px;z-index:500;pointer-events:none;opacity:.9`;
+    document.body.appendChild(ghost);
+    tlDrag = {mode: 'in', el: inBlk, ghost, col, y0: e.clientY, moved: false, st: inBlk.dataset.st, si: +inBlk.dataset.si};
+  } else if (e.target === col || e.target.classList.contains('tl-line')) {
+    if (e.pointerType === 'touch') return;     // on phones a swipe on empty space scrolls
+    e.preventDefault();
+    const y = tlColY(col, e.clientY), m0 = snapMin(pxToMin(y));
+    const box = document.createElement('div'); box.className = 'tl-event tl-new';
+    col.appendChild(box);
+    tlDrag = {mode: 'create', col, box, m0, moved: false, y0: e.clientY};
+  } else return;
+  document.addEventListener('pointermove', tlPointerMove);
+  document.addEventListener('pointerup', tlPointerUp, {once: true});
+}
+function tlPointerMove(e) {
+  const d = tlDrag; if (!d) return;
+  if (Math.abs(e.clientY - d.y0) > 4) d.moved = true;
+  if (!d.moved) return;
+  const stepPx = TL_PX_PER_H * TL_SNAP / 60, dy = Math.round((e.clientY - d.y0) / stepPx) * stepPx;
+  const maxPx = (TL_END_H - TL_START_H) * TL_PX_PER_H;
+  if (d.mode === 'move') {
+    const top = Math.max(0, Math.min(maxPx - d.h0, d.top0 + dy));
+    d.el.style.top = top + 'px'; d.el.classList.add('tl-dragging');
+    tlShowTime(d.el, pxToMin(top), pxToMin(top + d.h0));
+  } else if (d.mode === 'resize') {
+    const h = Math.max(stepPx, Math.min(maxPx - d.top0, d.h0 + dy));
+    d.el.style.height = h + 'px'; d.el.classList.add('tl-dragging');
+    tlShowTime(d.el, pxToMin(d.top0), pxToMin(d.top0 + h));
+  } else if (d.mode === 'in') {
+    d.ghost.style.top = (e.clientY - 14) + 'px';
+  } else if (d.mode === 'create') {
+    const m1 = snapMin(pxToMin(tlColY(d.col, e.clientY)));
+    const a = Math.min(d.m0, m1), b = Math.max(d.m0, m1, a + TL_SNAP);
+    d.box.style.top = minutesToPx(a) + 'px'; d.box.style.height = (minutesToPx(b) - minutesToPx(a)) + 'px';
+    d.box.textContent = minToHM(a) + '–' + minToHM(b); d.a = a; d.b = b;
+  }
+}
+function tlShowTime(el, a, b) { const t = el.querySelector('.tl-event-time'); if (t) t.textContent = minToHM(snapMin(a)) + '–' + minToHM(snapMin(b)); }
+function tlPointerUp(e) {
+  document.removeEventListener('pointermove', tlPointerMove);
+  const d = tlDrag; tlDrag = null; if (!d) return;
+  const ds = dailyDate;
+  if (d.mode === 'move' || d.mode === 'resize') {
+    if (!d.moved) { openEvEdit(ds, d.st, d.si); return; }
+    const top = parseFloat(d.el.style.top), h = parseFloat(d.el.style.height);
+    tlSetTime(ds, d.st, d.si, snapMin(pxToMin(top)), snapMin(pxToMin(top + h)));
+  } else if (d.mode === 'in') {
+    d.ghost.remove();
+    if (!d.moved) { openEvEdit(ds, d.st, d.si); return; }
+    const r = d.col.getBoundingClientRect();
+    if (e.clientY < r.top || e.clientY > r.bottom) return;
+    const item = allEventsOn(ds).find(x => x.srcType === d.st && x.srcIdx === d.si);
+    const len = item && (item.ev.type === 'class' || item.ev.type === 'review') ? Math.round((PLAN && PLAN.hoursPerSession || 2.5) * 60) : 60;
+    const a = snapMin(pxToMin(e.clientY - r.top));
+    tlSetTime(ds, d.st, d.si, a, Math.min(24 * 60, a + len));
+  } else if (d.mode === 'create') {
+    d.box.remove();
+    const a = d.moved ? d.a : d.m0, b = d.moved ? d.b : d.m0 + 60;
+    openAddTimeEvent();
+    document.getElementById('tevstart').value = minToHM(a);
+    document.getElementById('tevend').value = minToHM(Math.min(b, 24 * 60 - 1));
+  }
+}
+// One item's new time, everywhere: timeline, daily list, month calendar, Google conflict marks
+function tlSetTime(ds, srcType, srcIdx, a, b) {
+  if (b <= a) b = a + TL_SNAP;
+  setOwnTime(ds, srcType, srcIdx, minToHM(a), minToHM(Math.min(b, 24 * 60 - 1)));
+  try { reconcileDayBullets(ds); } catch (e) {}
+  renderTimeline();
+  try { renderBullets(); } catch (e) {}
+  try { gcalRenderDailyBanner(ds); } catch (e) {}
+  const cont = document.querySelector(`.ev-container[data-ds="${ds}"]`); if (cont) buildCalDayEvents(cont, ds);
 }
 
 function renderTimeline() {
@@ -976,30 +1098,33 @@ function renderTimeline() {
     html += `<div class="tl-now" style="top:${minutesToPx(nowMin)}px"></div>`;
   }
 
-  // User-added time events
-  const tevs = getTimeEvents(dailyDate);
-  tevs.forEach((ev, i) => {
-    const color  = ev.type==='appt'?(apptColor(ev.course)):courseColor(ev.course);
-    const top    = minutesToPx(timeToMinutes(ev.start));
-    const height = Math.max(24, minutesToPx(timeToMinutes(ev.end)) - top);
-    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44"
-              onclick="openAddTimeEvent(${i})">
-      <div class="tl-event-name">${escH(ev.course)}</div>
-      <div class="tl-event-time">${ev.start}–${ev.end}${ev.note?' · '+escH(ev.note):''}</div>
-      <button class="tl-event-del" onclick="event.stopPropagation();deleteTimeEvent(${i})">✕</button>
-    </div>`;
+  migrateLegacyTimes(dailyDate);
+  // Every item with a time: drag to move, drag the bottom edge to change the length,
+  // click to edit. Overlapping items sit side by side.
+  const all = allEventsOn(dailyDate);
+  const rest = all;
+  const timed = all.map(x => ({...x, t: eventTime(dailyDate, x.ev)})).filter(x => x.t)
+    .map(x => ({...x, s: timeToMinutes(x.t.start), e: Math.max(timeToMinutes(x.t.end), timeToMinutes(x.t.start) + 15)}))
+    .sort((p, q) => p.s - q.s || q.e - p.e);
+  let cluster = [], clusterEnd = -1;
+  const flush = () => { const cols = Math.max(...cluster.map(x => x.col)) + 1; cluster.forEach(x => x.cols = cols); cluster = []; };
+  timed.forEach(x => {
+    if (cluster.length && x.s >= clusterEnd) flush();
+    const taken = new Set(cluster.filter(y => y.e > x.s).map(y => y.col));
+    let c = 0; while (taken.has(c)) c++;
+    x.col = c; cluster.push(x); clusterEnd = Math.max(clusterEnd, x.e);
   });
-
-  // Calendar events that have a time (study slots, 瑜伽（9:30-11:30）…) but no manual entry
-  const rest = allEventsOn(dailyDate).filter(({ev})=>ownTime(dailyDate, ev) || !tevs.some(t=>sameTimeKind(t, ev.course, ev.type)));
-  rest.forEach(({ev,srcType,srcIdx})=>{
-    const t = eventTime(dailyDate, ev); if (!t) return;
+  if (cluster.length) flush();
+  timed.forEach(({ev, srcType, srcIdx, t, col, cols}) => {
     const color = evColor(ev);
     const top = minutesToPx(timeToMinutes(t.start));
-    const height = Math.max(24, minutesToPx(timeToMinutes(t.end)) - top);
-    html += `<div class="tl-event" style="top:${top}px;height:${height}px;background:${color}22;color:${color};border:1px solid ${color}44;cursor:pointer" title="點擊編輯" onclick="openEvEdit(${jsAttr(dailyDate)},${jsAttr(srcType)},${srcIdx})">
-      <div class="tl-event-name">${escH(ev.course)}${evLabel(dailyDate, ev) && ev.label!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(evLabel(dailyDate, ev))+'</span>' : ''}</div>
+    const height = Math.max(22, minutesToPx(timeToMinutes(t.end)) - top);
+    const lb = evLabel(dailyDate, ev);
+    html += `<div class="tl-event tl-drag" data-st="${srcType}" data-si="${srcIdx}" title="拖曳可移動，拉下緣可調整長度，點一下編輯"
+      style="top:${top}px;height:${height}px;left:calc(${col}/${cols}*100% + 4px);right:auto;width:calc(100%/${cols} - 8px);background:${color}22;color:${color};border:1px solid ${color}55">
+      <div class="tl-event-name">${escH(ev.course)}${lb && lb!=='—' ? ' <span style="opacity:.7;font-size:10px">'+escH(lb)+'</span>' : ''}</div>
       <div class="tl-event-time">${t.start}–${t.end}</div>
+      <div class="tl-resize"></div>
     </div>`;
   });
 
@@ -1007,12 +1132,13 @@ function renderTimeline() {
 
   // Events without any time below
   const unscheduled = rest.filter(({ev})=>!eventTime(dailyDate, ev));
+  window._tlUnsched = unscheduled.map(x => ({srcType: x.srcType, srcIdx: x.srcIdx}));
   if (unscheduled.length) {
     html += `<div class="tl-unscheduled">
       <div class="tl-unsched-label">未設定時間</div>`;
-    unscheduled.forEach(({ev})=>{
+    unscheduled.forEach(({ev,srcType,srcIdx})=>{
       const color=evColor(ev);
-      html+=`<div class="tl-event tl-event-unsched" style="background:${color}22;color:${color};border:1px dashed ${color}55">
+      html+=`<div class="tl-event tl-event-unsched tl-drag-in" data-st="${srcType}" data-si="${srcIdx}" title="拖到上面的時間軸就能排時間，點一下編輯" style="background:${color}22;color:${color};border:1px dashed ${color}55">
         <div class="tl-event-name">${escH(ev.course)} <span style="opacity:.6;font-size:10px">${badgeLabel(ev.type)}</span></div>
       </div>`;
     });
@@ -1020,9 +1146,11 @@ function renderTimeline() {
   }
 
   tl.innerHTML = html;
-  // Scroll the timeline to "now" (today) or the first item, so it isn't stuck at 06:00
+  tlBindDrag(tl);
+  // Scroll the timeline to "now" (today) or the first item, so it isn't stuck at 06:00 (only when the day changes)
   const wrap = tl.closest('.timeline-wrap');
-  if (wrap) {
+  if (wrap && tl.dataset.ds !== dailyDate) {
+    tl.dataset.ds = dailyDate;
     const tops = [...tl.querySelectorAll('.tl-now, .tl-col > .tl-event')].map(e => parseFloat(e.style.top)).filter(n => !isNaN(n));
     const nowEl = tl.querySelector('.tl-now');
     const target = nowEl ? parseFloat(nowEl.style.top) : (tops.length ? Math.min(...tops) : 0);
@@ -1320,7 +1448,7 @@ function reconcileDayBullets(ds){
     if(i<0){ missing.push({ev, isDone:done.includes(`${srcType}-${srcIdx}`)}); return; }
     used.add(i);
     const b=bullets[i], base=eventBulletText(ds,ev);
-    const autoText = t => { const s=stripBulletTime(t); return s===stripBulletTime(base) || s===ev.course || (s.startsWith(ev.course+'　') && /^第[\d-]+(?:堂|次複習)$/.test(s.slice(ev.course.length+1))); };
+    const autoText = t => { const s=stripBulletTime(t); return s===stripBulletTime(base) || s===ev.course || (s.startsWith(ev.course+'　') && TIME_LABEL.test(s.slice(ev.course.length+1))) || (s.startsWith(ev.course+'　') && /^第[\d-]+(?:堂|次複習)$/.test(s.slice(ev.course.length+1))); };
     if(b.ref && autoText(b.text) && b.text!==base){ b.text=base; changed=true; }
   });
   const keep=bullets.filter((b,j)=>{
@@ -1396,5 +1524,6 @@ try { migrateCalendarDoneToBullets(); } catch(e) { console.error('migrate:', e);
 renderCountdown();
 renderDashboard();
 if (!planReady && !localStorage.getItem('sp-sync-uid')) showWelcome();
+try { migrateAllLegacyTimes(); } catch(e) { console.error('times:', e); }
 try { initSync(); } catch(e) { console.error('sync:', e); }
 try { if (planReady) gcalStartup(); } catch(e) { console.error('gcal:', e); }
