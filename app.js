@@ -126,9 +126,10 @@ function labelMap() {
         cls[c] = e;
         const note = !pat && L && L !== '—' && !/^\d{1,2}:\d{2}\s*[–-]/.test(L) ? '・' + L : '';
         map.set(lblKey(ds, ev), { label: (n > 1 ? `第${s}-${e}堂` : `第${s}堂`) + note, progress: totals[c] ? `${e}/${totals[c]}` : null });
-      } else if (ev.type === 'review' && LBL_REVIEW.test(ev.label || '')) {
+      } else if (ev.type === 'review' && (LBL_REVIEW.test(L) || totals[c])) {
         rv[c] = (rv[c] || 0) + 1;
-        map.set(lblKey(ds, ev), { label: `第${rv[c]}次複習`, progress: null });
+        const note = !LBL_REVIEW.test(L) && L && L !== '—' && !/^\d{1,2}:\d{2}\s*[–-]/.test(L) ? '・' + L : '';
+        map.set(lblKey(ds, ev), { label: `第${rv[c]}次複習` + note, progress: null });
       }
     });
   });
